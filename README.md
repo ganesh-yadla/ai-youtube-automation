@@ -1,10 +1,10 @@
 # AI Creator OS
 
-An AI-powered platform that discovers trending topics, analyzes successful content, and (eventually) generates YouTube Shorts and other social content. Long-term SaaS product, built incrementally one validated feature at a time.
+An AI-powered platform that discovers trending topics, analyzes successful content, and (eventually) generates and publishes YouTube Shorts. Near-term goal: a personal tool to run against your own channel(s) and earn YouTube ad revenue — not a multi-tenant SaaS product yet (see [Roadmap](#roadmap)). Built incrementally, one validated feature at a time.
 
 ## Status
 
-**Phase 1 — Trend Intelligence MVP.** This is the first feature, built deliberately before authentication or payments: give it a keyword, get back trending YouTube videos plus AI-generated insights on why they're working. Backend is implemented; a frontend has not been built yet (see [Roadmap](#roadmap)).
+**Phase 0 — Trend Intelligence backend: done and verified against real infrastructure.** Give it a keyword, get back trending YouTube videos plus AI-generated insights on why they're working. Verified end-to-end against a live Postgres, Redis, and the YouTube API. The `/insights` endpoint (Claude) is implemented but not yet verified against the real Anthropic API — deliberately deferred to avoid spend until needed. No frontend yet; the API is used via `/docs` or any HTTP client.
 
 ## Architecture
 
@@ -87,17 +87,27 @@ Requires a local Postgres and Redis reachable at the URLs in `backend/.env`.
 
 ```bash
 cd backend
-pytest
+pytest              # 20 tests against fakes/stubs — no live Postgres/Redis/YouTube/Claude needed
+pytest -m db        # 5 tests against a real Postgres — requires `docker compose up -d postgres` + `alembic upgrade head` first
 ```
 
-20 unit and integration tests, run against fakes/stubs (no live Postgres, Redis, YouTube, or Claude required). `ruff check app tests alembic` for linting.
+`ruff check app tests alembic` for linting. The `-m db` tests exist specifically because two real bugs (a datetime timezone mismatch, a missing SQLAlchemy relationship load) passed the fake-based suite completely and only surfaced against a live database — see `backend/tests/db/test_trend_repository_db.py` for what each one regression-tests.
 
 ## Known Gaps
 
-- **No real-infrastructure verification yet.** All tests pass against fakes/stubs; the app has not been run end-to-end against a live Postgres, Redis, YouTube API, or Claude API. Needs Docker installed and real API keys in `backend/.env`.
+- **`/insights` (Claude) not yet verified against the real Anthropic API.** `/search` and `GET /{id}` are verified end-to-end against live Postgres, Redis, and YouTube. `ANTHROPIC_API_KEY` is still a placeholder — deferred deliberately since each real call has a small but nonzero cost.
 - **No frontend.** The API is usable via `/docs` or any HTTP client; a UI is a separate, not-yet-approved feature.
 - **Growth score is an estimate**, not verified velocity — `views ÷ days since publish`, not a time-series measurement.
+- **No Auth/multi-tenancy**, deliberately — see Roadmap below.
 
 ## Roadmap
 
-Planned modules beyond Phase 1 (not yet built): Competitor Analysis, Research Agent, Script Agent, Thumbnail Agent, Voice Generation, Video Generation, SEO Optimization, Publishing Automation, Analytics Dashboard.
+Revised phase order (personal-use-first, not the original module list order):
+
+1. ~~Trend Intelligence~~ — done
+2. Script Agent — turn trend insights into an actual video script
+3. Thumbnail Agent + Voice Generation
+4. Video Generation — the major cost inflection point (video-gen APIs are far more expensive than LLM/text calls)
+5. Publishing Automation — upload to YouTube; this is the revenue-unlock step (YouTube Partner Program ad revenue)
+
+Deferred until/unless the product opens up to other creators: Auth, Payments/multi-tenancy. Flexible, not on the critical path: Competitor Analysis, Research Agent, SEO Optimization, Analytics Dashboard.
