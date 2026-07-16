@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, ForeignKey, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -20,7 +20,7 @@ class TrendSearch(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     keyword: Mapped[str] = mapped_column(Text, index=True)
-    requested_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     youtube_quota_units_used: Mapped[int] = mapped_column(default=0)
 
     videos: Mapped[list["TrendingVideo"]] = relationship(
@@ -46,7 +46,7 @@ class TrendingVideo(Base):
     channel_name: Mapped[str] = mapped_column(Text)
     channel_id: Mapped[str] = mapped_column(Text)
     view_count: Mapped[int] = mapped_column(BigInteger)
-    published_at: Mapped[datetime]
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     duration_seconds: Mapped[int]
     thumbnail_url: Mapped[str] = mapped_column(Text)
     video_url: Mapped[str] = mapped_column(Text)
@@ -73,6 +73,6 @@ class TrendAnalysis(Base):
     content_gaps: Mapped[list] = mapped_column(JSONB)
     video_ideas: Mapped[list] = mapped_column(JSONB)
     ai_model_used: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     search: Mapped["TrendSearch"] = relationship(back_populates="analysis")

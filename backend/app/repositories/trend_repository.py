@@ -28,7 +28,7 @@ class TrendRepository:
 
         self._session.add(search)
         await self._session.commit()
-        await self._session.refresh(search, attribute_names=["videos"])
+        await self._session.refresh(search, attribute_names=["videos", "analysis"])
 
         return TrendSearchDomain.model_validate(search)
 
