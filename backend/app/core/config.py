@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(default=None)
     ollama_base_url: str = Field(default="http://localhost:11434")
 
+    # TTS is a separate capability from text generation (LLMClientInterface
+    # vs TTSClientInterface) with its own provider choice - e.g. running
+    # ollama for scripts doesn't imply local TTS, and vice versa.
+    tts_provider: Literal["gemini", "piper"] = Field(default="gemini")
+    piper_model_path: str = Field(default="models/piper/en_US-lessac-medium.onnx")
+
     trend_cache_ttl_seconds: int = Field(default=43200)  # 12 hours
 
     # Relative to the process working directory (backend/, per how uvicorn is
@@ -42,13 +48,11 @@ class Settings(BaseSettings):
     def _require_key_for_selected_provider(self) -> "Settings":
         if self.llm_provider == "claude" and not self.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER=claude")
-        # Unconditional, not just when LLM_PROVIDER=gemini: Voice Generation
-        # always uses Gemini's TTS regardless of LLM_PROVIDER, since Claude
-        # has no TTS integration.
+        # Unconditional regardless of llm_provider/tts_provider: Visual
+        # Generation's image step always uses Gemini today (no local/other
+        # image provider exists yet).
         if not self.gemini_api_key:
-            raise ValueError(
-                "GEMINI_API_KEY is required (default LLM provider, and always used for Voice Generation)"
-            )
+            raise ValueError("GEMINI_API_KEY is required (always used for Visual Generation's image step)")
         return self
 
 

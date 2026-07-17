@@ -20,6 +20,7 @@ from app.infrastructure.external.interfaces.llm_client import LLMClientInterface
 from app.infrastructure.external.interfaces.tts_client import TTSClientInterface
 from app.infrastructure.external.interfaces.video_assembler import VideoAssemblerInterface
 from app.infrastructure.external.ollama_client import OllamaClient
+from app.infrastructure.external.piper_client import PiperClient
 from app.infrastructure.external.youtube_client import YoutubeClient
 from app.repositories.script_repository import ScriptRepository
 from app.repositories.trend_repository import TrendRepository
@@ -57,9 +58,16 @@ def get_llm_client() -> LLMClientInterface:
     return ClaudeClient()
 
 
+@lru_cache
+def get_piper_client() -> PiperClient:
+    return PiperClient()
+
+
 def get_tts_client() -> TTSClientInterface:
-    # Gemini is the only TTS provider today, regardless of LLM_PROVIDER -
-    # shares the connection with get_llm_client() when that's also Gemini.
+    settings = get_settings()
+    if settings.tts_provider == "piper":
+        return get_piper_client()
+    # Shares the connection with get_llm_client() when that's also Gemini.
     return get_gemini_client()
 
 

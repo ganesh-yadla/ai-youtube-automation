@@ -16,6 +16,7 @@ dependencies = [
     "anthropic>=0.40",
     "google-genai>=2.12",
     "python-json-logger>=2.0",
+    "piper-tts>=1.4",
 ]
 
 [project.optional-dependencies]
