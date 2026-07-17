@@ -2,8 +2,8 @@
 
 Verified against a real ffmpeg 8.1.2 render on Windows (5-segment script,
 real Gemini images + real Gemini TTS audio -> a valid 1080x1920 h264/aac
-mp4). Two real, environment-specific bugs were found and fixed during that
-verification, not just theorized:
+mp4). Three real bugs were found and fixed during that verification, not
+just theorized:
 
 1. Windows absolute paths (e.g. C:/Users/...) break ffmpeg's filtergraph
    parser even inside single-quoted option values, because ':' is a
@@ -19,6 +19,12 @@ verification, not just theorized:
    platforms - wired via `Settings.video_font_file` - and left unset on
    platforms where ffmpeg resolves a default font on its own (most Linux
    builds via a working fontconfig).
+3. drawtext never wraps long lines on its own - a full-sentence caption
+   ran off the right edge of the frame, cut off mid-word. `_wrap_caption`
+   greedily wraps at word boundaries before the text ever reaches ffmpeg,
+   and `y=h-text_h-100` (rather than a fixed y) anchors the block's bottom
+   margin so it grows upward as more lines are added instead of overflowing
+   past the bottom of the frame.
 
 Security: builds the argument list for asyncio.create_subprocess_exec
 directly (never shell=True, never a shell string), so there is no shell-
@@ -37,6 +43,8 @@ from app.infrastructure.external.interfaces.video_assembler import VideoScene
 
 _VIDEO_WIDTH = 1080
 _VIDEO_HEIGHT = 1920
+_CAPTION_FONTSIZE = 56
+_CAPTION_MAX_CHARS_PER_LINE = 28
 
 
 class FFmpegVideoAssembler:
@@ -54,7 +62,8 @@ class FFmpegVideoAssembler:
 
             for index, scene in enumerate(scenes):
                 caption_file = tmp_path / f"caption_{index}.txt"
-                caption_file.write_text(scene.caption_text, encoding="utf-8")
+                wrapped_caption = self._wrap_caption(scene.caption_text, _CAPTION_MAX_CHARS_PER_LINE)
+                caption_file.write_text(wrapped_caption, encoding="utf-8")
 
                 clip_path = tmp_path / f"clip_{index}.mp4"
                 await self._render_scene(scene, caption_file, clip_path)
@@ -73,8 +82,8 @@ class FFmpegVideoAssembler:
         fontfile_part = f":fontfile='{self._escape_filter_path(self._font_file)}'" if self._font_file else ""
         drawtext = (
             f"drawtext=textfile='{caption_path}'{fontfile_part}:"
-            "fontcolor=white:fontsize=56:borderw=3:bordercolor=black:"
-            "x=(w-text_w)/2:y=h-300"
+            f"fontcolor=white:fontsize={_CAPTION_FONTSIZE}:borderw=3:bordercolor=black:"
+            "x=(w-text_w)/2:y=h-text_h-100"
         )
         video_filter = (
             f"scale={_VIDEO_WIDTH}:{_VIDEO_HEIGHT}:force_original_aspect_ratio=increase,"
@@ -121,6 +130,27 @@ class FFmpegVideoAssembler:
             str(output_path),
         ]
         await self._run(args)
+
+    @staticmethod
+    def _wrap_caption(text: str, max_chars_per_line: int) -> str:
+        # drawtext never wraps long lines on its own - without this, a
+        # caption longer than the frame width just runs off the right edge
+        # (confirmed via a real render: "3-step digital minimali..." was
+        # cut off mid-word). Greedy word wrap, paired with y=h-text_h-100
+        # in _render_scene so the block grows upward instead of overflowing
+        # the bottom of the frame as more lines are added.
+        lines: list[str] = []
+        current_line = ""
+        for word in text.split():
+            candidate = f"{current_line} {word}".strip()
+            if len(candidate) > max_chars_per_line and current_line:
+                lines.append(current_line)
+                current_line = word
+            else:
+                current_line = candidate
+        if current_line:
+            lines.append(current_line)
+        return "\n".join(lines)
 
     @staticmethod
     def _escape_filter_path(path: str) -> str:
