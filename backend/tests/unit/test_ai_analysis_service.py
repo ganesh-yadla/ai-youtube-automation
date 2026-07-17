@@ -1,4 +1,4 @@
-"""Unit tests for AIAnalysisService, using a fake Claude client and repository."""
+"""Unit tests for AIAnalysisService, using a fake LLM client and repository."""
 
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -13,15 +13,19 @@ from app.exceptions.trend_exceptions import (
     TrendAnalysisAlreadyExistsError,
     TrendSearchNotFoundError,
 )
-from app.infrastructure.external.claude_client import TrendInsights
+from app.infrastructure.external.interfaces.llm_client import TrendInsights
 from app.services.ai_analysis_service import AIAnalysisService
 
 
-class FakeClaudeClient:
+class FakeLLMClient:
     def __init__(self, insights: TrendInsights) -> None:
         self.insights = insights
         self.last_prompt: str | None = None
         self.calls = 0
+
+    @property
+    def model_name(self) -> str:
+        return "fake-llm-model"
 
     async def analyze_trending_videos(self, prompt: str) -> TrendInsights:
         self.calls += 1
@@ -107,42 +111,42 @@ def sample_insights() -> TrendInsights:
 
 async def test_analyze_persists_insights_from_claude(sample_insights):
     search = _make_search([_make_video("Top AI Tools", 1), _make_video("AI Tools Review", 2)])
-    claude_client = FakeClaudeClient(sample_insights)
+    llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(search)
-    service = AIAnalysisService(claude_client, repository)
+    service = AIAnalysisService(llm_client, repository)
 
     result = await service.analyze(search.id)
 
     assert result.why_performing == sample_insights.why_performing
-    assert result.ai_model_used == "claude-opus-4-8"
+    assert result.ai_model_used == "fake-llm-model"
     assert len(repository.saved_calls) == 1
     assert repository.saved_calls[0]["search_id"] == search.id
 
 
 async def test_analyze_builds_prompt_with_video_metadata(sample_insights):
     search = _make_search([_make_video("Top AI Tools", 1)])
-    claude_client = FakeClaudeClient(sample_insights)
+    llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(search)
-    service = AIAnalysisService(claude_client, repository)
+    service = AIAnalysisService(llm_client, repository)
 
     await service.analyze(search.id)
 
-    assert claude_client.last_prompt is not None
-    assert "ai tools" in claude_client.last_prompt
-    assert "Top AI Tools" in claude_client.last_prompt
-    assert "100,000 views" in claude_client.last_prompt
-    assert "growth score 1,000 views/day" in claude_client.last_prompt
+    assert llm_client.last_prompt is not None
+    assert "ai tools" in llm_client.last_prompt
+    assert "Top AI Tools" in llm_client.last_prompt
+    assert "100,000 views" in llm_client.last_prompt
+    assert "growth score 1,000 views/day" in llm_client.last_prompt
 
 
 async def test_analyze_raises_when_search_not_found(sample_insights):
-    claude_client = FakeClaudeClient(sample_insights)
+    llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(None)
-    service = AIAnalysisService(claude_client, repository)
+    service = AIAnalysisService(llm_client, repository)
 
     with pytest.raises(TrendSearchNotFoundError):
         await service.analyze(uuid4())
 
-    assert claude_client.calls == 0
+    assert llm_client.calls == 0
 
 
 async def test_analyze_raises_when_already_analyzed(sample_insights):
@@ -159,23 +163,23 @@ async def test_analyze_raises_when_already_analyzed(sample_insights):
         created_at=datetime.now(UTC),
     )
     search = _make_search([_make_video("Top AI Tools", 1)], analysis=existing_analysis)
-    claude_client = FakeClaudeClient(sample_insights)
+    llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(search)
-    service = AIAnalysisService(claude_client, repository)
+    service = AIAnalysisService(llm_client, repository)
 
     with pytest.raises(TrendAnalysisAlreadyExistsError):
         await service.analyze(search.id)
 
-    assert claude_client.calls == 0
+    assert llm_client.calls == 0
 
 
 async def test_analyze_raises_when_search_has_no_videos(sample_insights):
     search = _make_search([])
-    claude_client = FakeClaudeClient(sample_insights)
+    llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(search)
-    service = AIAnalysisService(claude_client, repository)
+    service = AIAnalysisService(llm_client, repository)
 
     with pytest.raises(NoTrendingVideosFoundError):
         await service.analyze(search.id)
 
-    assert claude_client.calls == 0
+    assert llm_client.calls == 0

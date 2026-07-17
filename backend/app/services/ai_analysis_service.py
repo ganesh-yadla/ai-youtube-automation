@@ -10,17 +10,17 @@ from app.exceptions.trend_exceptions import (
     TrendAnalysisAlreadyExistsError,
     TrendSearchNotFoundError,
 )
-from app.infrastructure.external.claude_client import CLAUDE_MODEL, ClaudeClient
+from app.infrastructure.external.interfaces.llm_client import LLMClientInterface
 from app.repositories.interfaces.trend_repository import TrendRepositoryInterface
 
 logger = logging.getLogger(__name__)
 
 
 class AIAnalysisService:
-    """Orchestrates: load a TrendSearch, build a prompt, call Claude, persist insights."""
+    """Orchestrates: load a TrendSearch, build a prompt, call the LLM, persist insights."""
 
-    def __init__(self, claude_client: ClaudeClient, repository: TrendRepositoryInterface) -> None:
-        self._claude_client = claude_client
+    def __init__(self, llm_client: LLMClientInterface, repository: TrendRepositoryInterface) -> None:
+        self._llm_client = llm_client
         self._repository = repository
 
     async def analyze(self, search_id: UUID) -> TrendAnalysisDomain:
@@ -39,7 +39,7 @@ class AIAnalysisService:
         )
 
         prompt = self._build_prompt(search.keyword, search.videos)
-        insights = await self._claude_client.analyze_trending_videos(prompt)
+        insights = await self._llm_client.analyze_trending_videos(prompt)
 
         return await self._repository.save_analysis(
             search_id=search_id,
@@ -49,7 +49,7 @@ class AIAnalysisService:
             common_thumbnail_patterns=insights.common_thumbnail_patterns,
             content_gaps=insights.content_gaps,
             video_ideas=insights.video_ideas,
-            ai_model_used=CLAUDE_MODEL,
+            ai_model_used=self._llm_client.model_name,
         )
 
     @staticmethod

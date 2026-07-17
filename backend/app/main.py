@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.exception_handlers import register_exception_handlers
-from app.api.v1.dependencies import get_claude_client, get_youtube_client
+from app.api.v1.dependencies import get_llm_client, get_youtube_client
 from app.api.v1.routers.scripts import router as scripts_router
 from app.api.v1.routers.trends import router as trends_router
 from app.core.config import get_settings
@@ -19,7 +19,7 @@ from app.infrastructure.db.session import engine
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     yield
     await get_youtube_client().close()
-    await get_claude_client().close()
+    await get_llm_client().close()
     await get_redis_client().aclose()
     await engine.dispose()
 

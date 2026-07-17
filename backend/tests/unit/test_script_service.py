@@ -1,4 +1,4 @@
-"""Unit tests for ScriptService, using fakes for Claude and both repositories."""
+"""Unit tests for ScriptService, using a fake LLM client and both repositories."""
 
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -10,15 +10,19 @@ from app.domain.models.trend import TrendAnalysis as TrendAnalysisDomain
 from app.domain.models.trend import TrendSearch as TrendSearchDomain
 from app.exceptions.script_exceptions import TrendAnalysisRequiredError
 from app.exceptions.trend_exceptions import TrendSearchNotFoundError
-from app.infrastructure.external.claude_client import ScriptOutput, ScriptSegmentOutput
+from app.infrastructure.external.interfaces.llm_client import ScriptOutput, ScriptSegmentOutput
 from app.services.script_service import ScriptService
 
 
-class FakeClaudeClient:
+class FakeLLMClient:
     def __init__(self, output: ScriptOutput) -> None:
         self.output = output
         self.last_prompt: str | None = None
         self.calls = 0
+
+    @property
+    def model_name(self) -> str:
+        return "fake-llm-model"
 
     async def generate_script(self, prompt: str) -> ScriptOutput:
         self.calls += 1
@@ -104,15 +108,15 @@ def sample_output() -> ScriptOutput:
 async def test_generate_persists_script_with_explicit_video_idea(sample_output):
     analysis = _make_analysis()
     search = _make_search(analysis)
-    claude_client = FakeClaudeClient(sample_output)
+    llm_client = FakeLLMClient(sample_output)
     trend_repo = FakeTrendRepository(search)
     script_repo = FakeScriptRepository()
-    service = ScriptService(claude_client, trend_repo, script_repo)
+    service = ScriptService(llm_client, trend_repo, script_repo)
 
     result = await service.generate(search.id, video_idea="Top 5 AI tools for beginners in 2026")
 
     assert result.title == sample_output.title
-    assert result.ai_model_used == "claude-opus-4-8"
+    assert result.ai_model_used == "fake-llm-model"
     assert len(result.segments) == 2
     assert script_repo.saved_calls[0]["search_id"] == search.id
 
@@ -120,34 +124,34 @@ async def test_generate_persists_script_with_explicit_video_idea(sample_output):
 async def test_generate_prompt_includes_explicit_idea_instruction(sample_output):
     analysis = _make_analysis()
     search = _make_search(analysis)
-    claude_client = FakeClaudeClient(sample_output)
-    service = ScriptService(claude_client, FakeTrendRepository(search), FakeScriptRepository())
+    llm_client = FakeLLMClient(sample_output)
+    service = ScriptService(llm_client, FakeTrendRepository(search), FakeScriptRepository())
 
     await service.generate(search.id, video_idea="My custom idea")
 
-    assert claude_client.last_prompt is not None
-    assert 'Write the script for this specific video idea: "My custom idea"' in claude_client.last_prompt
+    assert llm_client.last_prompt is not None
+    assert 'Write the script for this specific video idea: "My custom idea"' in llm_client.last_prompt
 
 
 async def test_generate_prompt_omits_idea_instruction_when_not_given(sample_output):
     analysis = _make_analysis()
     search = _make_search(analysis)
-    claude_client = FakeClaudeClient(sample_output)
-    service = ScriptService(claude_client, FakeTrendRepository(search), FakeScriptRepository())
+    llm_client = FakeLLMClient(sample_output)
+    service = ScriptService(llm_client, FakeTrendRepository(search), FakeScriptRepository())
 
     await service.generate(search.id)
 
-    assert claude_client.last_prompt is not None
-    assert "No specific video idea was given" in claude_client.last_prompt
-    assert "Top 5 AI tools for beginners in 2026" in claude_client.last_prompt  # from analysis.video_ideas
+    assert llm_client.last_prompt is not None
+    assert "No specific video idea was given" in llm_client.last_prompt
+    assert "Top 5 AI tools for beginners in 2026" in llm_client.last_prompt  # from analysis.video_ideas
 
 
 async def test_generate_uses_claude_resolved_idea_when_none_given(sample_output):
     analysis = _make_analysis()
     search = _make_search(analysis)
-    claude_client = FakeClaudeClient(sample_output)
+    llm_client = FakeLLMClient(sample_output)
     script_repo = FakeScriptRepository()
-    service = ScriptService(claude_client, FakeTrendRepository(search), script_repo)
+    service = ScriptService(llm_client, FakeTrendRepository(search), script_repo)
 
     result = await service.generate(search.id)
 
@@ -155,32 +159,32 @@ async def test_generate_uses_claude_resolved_idea_when_none_given(sample_output)
 
 
 async def test_generate_raises_when_search_not_found(sample_output):
-    claude_client = FakeClaudeClient(sample_output)
-    service = ScriptService(claude_client, FakeTrendRepository(None), FakeScriptRepository())
+    llm_client = FakeLLMClient(sample_output)
+    service = ScriptService(llm_client, FakeTrendRepository(None), FakeScriptRepository())
 
     with pytest.raises(TrendSearchNotFoundError):
         await service.generate(uuid4())
 
-    assert claude_client.calls == 0
+    assert llm_client.calls == 0
 
 
 async def test_generate_raises_when_analysis_missing(sample_output):
     search = _make_search(analysis=None)
-    claude_client = FakeClaudeClient(sample_output)
-    service = ScriptService(claude_client, FakeTrendRepository(search), FakeScriptRepository())
+    llm_client = FakeLLMClient(sample_output)
+    service = ScriptService(llm_client, FakeTrendRepository(search), FakeScriptRepository())
 
     with pytest.raises(TrendAnalysisRequiredError):
         await service.generate(search.id)
 
-    assert claude_client.calls == 0
+    assert llm_client.calls == 0
 
 
 async def test_get_by_id_returns_persisted_script(sample_output):
     analysis = _make_analysis()
     search = _make_search(analysis)
-    claude_client = FakeClaudeClient(sample_output)
+    llm_client = FakeLLMClient(sample_output)
     script_repo = FakeScriptRepository()
-    service = ScriptService(claude_client, FakeTrendRepository(search), script_repo)
+    service = ScriptService(llm_client, FakeTrendRepository(search), script_repo)
 
     created = await service.generate(search.id, video_idea="Top 5 AI tools for beginners in 2026")
     fetched = await service.get_by_id(created.id)
@@ -190,8 +194,8 @@ async def test_get_by_id_returns_persisted_script(sample_output):
 
 
 async def test_get_by_id_returns_none_when_not_found(sample_output):
-    claude_client = FakeClaudeClient(sample_output)
-    service = ScriptService(claude_client, FakeTrendRepository(None), FakeScriptRepository())
+    llm_client = FakeLLMClient(sample_output)
+    service = ScriptService(llm_client, FakeTrendRepository(None), FakeScriptRepository())
 
     result = await service.get_by_id(uuid4())
 

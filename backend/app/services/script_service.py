@@ -8,7 +8,7 @@ from app.domain.models.script import ScriptSegment
 from app.domain.models.trend import TrendAnalysis
 from app.exceptions.script_exceptions import TrendAnalysisRequiredError
 from app.exceptions.trend_exceptions import TrendSearchNotFoundError
-from app.infrastructure.external.claude_client import CLAUDE_MODEL, ClaudeClient
+from app.infrastructure.external.interfaces.llm_client import LLMClientInterface
 from app.repositories.interfaces.script_repository import ScriptRepositoryInterface
 from app.repositories.interfaces.trend_repository import TrendRepositoryInterface
 
@@ -16,15 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 class ScriptService:
-    """Orchestrates: load a TrendSearch's analysis, generate a script via Claude, persist it."""
+    """Orchestrates: load a TrendSearch's analysis, generate a script via the LLM, persist it."""
 
     def __init__(
         self,
-        claude_client: ClaudeClient,
+        llm_client: LLMClientInterface,
         trend_repository: TrendRepositoryInterface,
         script_repository: ScriptRepositoryInterface,
     ) -> None:
-        self._claude_client = claude_client
+        self._llm_client = llm_client
         self._trend_repository = trend_repository
         self._script_repository = script_repository
 
@@ -43,7 +43,7 @@ class ScriptService:
         )
 
         prompt = self._build_prompt(search.keyword, search.analysis, video_idea)
-        output = await self._claude_client.generate_script(prompt)
+        output = await self._llm_client.generate_script(prompt)
 
         segments = [
             ScriptSegment(text=segment.text, visual_description=segment.visual_description)
@@ -57,7 +57,7 @@ class ScriptService:
             hook=output.hook,
             segments=segments,
             cta=output.cta,
-            ai_model_used=CLAUDE_MODEL,
+            ai_model_used=self._llm_client.model_name,
         )
 
     async def get_by_id(self, script_id: UUID) -> ScriptDomain | None:
