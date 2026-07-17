@@ -1,13 +1,17 @@
-"""Thin async wrapper over the Gemini API. Implements LLMClientInterface
-and TTSClientInterface.
+"""Thin async wrapper over the Gemini API. Implements LLMClientInterface,
+TTSClientInterface, and ImageClientInterface.
 
 SDK usage verified against the installed `google-genai` package source
 (GenerateContentConfig field names, the .aio async surface, and the
-`response.parsed` structured-output field) and against one real API call
-for TTS specifically (audio bytes, WAV write, duration math, mime type all
+`response.parsed` structured-output field) and against real API calls for
+TTS specifically (audio bytes, WAV write, duration math, mime type all
 confirmed against a live response) rather than assumed from docs, since
 Google's SDK naming has changed across versions before and doc pages gave
-conflicting shapes during research.
+conflicting shapes during research. Image generation config fields
+(response_modalities, ImageConfig.aspect_ratio) are verified the same way
+against SDK source, but not yet against a live call - billing wasn't
+enabled on the Google Cloud project at the time this was written (image
+generation has no free tier at all, confirmed via a real 429).
 """
 
 import io
@@ -28,6 +32,7 @@ from app.infrastructure.external.interfaces.tts_client import DEFAULT_VOICE_NAME
 
 GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
+GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 
 # Gemini TTS output format, confirmed against a live response's mime type
 # (audio/l16; rate=24000; channels=1) - not documented as a stable contract,
@@ -99,3 +104,17 @@ class GeminiClient:
             wf.setframerate(_TTS_SAMPLE_RATE_HZ)
             wf.writeframes(pcm_data)
         return buffer.getvalue()
+
+    async def generate_image(self, prompt: str, aspect_ratio: str = "9:16") -> bytes:
+        response = await self._client.aio.models.generate_content(
+            model=GEMINI_IMAGE_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
+            ),
+        )
+        for part in response.candidates[0].content.parts:
+            if part.inline_data:
+                return part.inline_data.data
+        raise ValueError("Gemini image generation response contained no image data")

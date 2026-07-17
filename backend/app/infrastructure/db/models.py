@@ -120,3 +120,24 @@ class VoiceNarration(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     script: Mapped["VideoScript"] = relationship(back_populates="narration")
+    video: Mapped["AssembledVideo | None"] = relationship(
+        back_populates="narration", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class AssembledVideo(Base):
+    """The final rendered video for a VoiceNarration (1:1 - one video per narration)."""
+
+    __tablename__ = "assembled_videos"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    narration_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("voice_narrations.id", ondelete="CASCADE"), unique=True, index=True
+    )
+
+    video_file_path: Mapped[str] = mapped_column(Text)
+    thumbnail_file_path: Mapped[str] = mapped_column(Text)
+    duration_seconds: Mapped[float]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    narration: Mapped["VoiceNarration"] = relationship(back_populates="video")

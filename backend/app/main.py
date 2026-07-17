@@ -11,6 +11,7 @@ from app.api.exception_handlers import register_exception_handlers
 from app.api.v1.dependencies import get_gemini_client, get_llm_client, get_youtube_client
 from app.api.v1.routers.scripts import router as scripts_router
 from app.api.v1.routers.trends import router as trends_router
+from app.api.v1.routers.video import router as video_router
 from app.api.v1.routers.voice import router as voice_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(trends_router, prefix="/api/v1")
     fastapi_app.include_router(scripts_router, prefix="/api/v1")
     fastapi_app.include_router(voice_router, prefix="/api/v1")
+    fastapi_app.include_router(video_router, prefix="/api/v1")
     fastapi_app.mount("/media", StaticFiles(directory=media_root), name="media")
     register_exception_handlers(fastapi_app)
 

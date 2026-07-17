@@ -12,6 +12,7 @@ from app.exceptions.trend_exceptions import (
     TrendSearchNotFoundError,
     YouTubeAPIError,
 )
+from app.exceptions.video_exceptions import VideoAlreadyExistsError, VideoNotFoundError
 from app.exceptions.voice_exceptions import NarrationAlreadyExistsError, NarrationNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -46,11 +47,17 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
 
     @app.exception_handler(NarrationAlreadyExistsError)
-    async def handle_narration_already_exists(
-        _: Request, exc: NarrationAlreadyExistsError
-    ) -> JSONResponse:
+    async def handle_narration_already_exists(_: Request, exc: NarrationAlreadyExistsError) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": str(exc)})
 
     @app.exception_handler(NarrationNotFoundError)
     async def handle_narration_not_found(_: Request, exc: NarrationNotFoundError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(VideoAlreadyExistsError)
+    async def handle_video_already_exists(_: Request, exc: VideoAlreadyExistsError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(VideoNotFoundError)
+    async def handle_video_not_found(_: Request, exc: VideoNotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
