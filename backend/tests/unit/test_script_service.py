@@ -100,6 +100,8 @@ def sample_output() -> ScriptOutput:
         segments=[
             ScriptSegmentOutput(text="Here are 5 AI tools...", visual_description="Text overlay on gradient"),
             ScriptSegmentOutput(text="Number one is...", visual_description="Icon of tool 1"),
+            ScriptSegmentOutput(text="Number two is...", visual_description="Icon of tool 2"),
+            ScriptSegmentOutput(text="Number three is...", visual_description="Icon of tool 3"),
         ],
         cta="Follow for more AI tool breakdowns.",
     )
@@ -117,7 +119,7 @@ async def test_generate_persists_script_with_explicit_video_idea(sample_output):
 
     assert result.title == sample_output.title
     assert result.ai_model_used == "fake-llm-model"
-    assert len(result.segments) == 2
+    assert len(result.segments) == 4
     assert script_repo.saved_calls[0]["search_id"] == search.id
 
 

@@ -8,7 +8,7 @@ the same Protocol-based pattern already used for repositories.
 
 from typing import Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 MAX_OUTPUT_TOKENS = 4096
 
@@ -22,19 +22,40 @@ SYSTEM_PROMPT = (
 )
 
 SCRIPT_SYSTEM_PROMPT = (
-    "You are a YouTube Shorts scriptwriter. Given trend analysis insights for "
-    "a keyword (why similar videos perform well, common hooks, title "
-    "patterns, and suggested video ideas), write a complete Short script.\n\n"
+    "You are a YouTube Shorts scriptwriter for a channel about AI tools and "
+    "practical AI/automation tips. Write as a genuine practitioner who uses "
+    "these tools daily, not a generic listicle bot summarizing the "
+    "internet. Given trend analysis insights for a keyword (why similar "
+    "videos perform well, common hooks, title patterns, and suggested "
+    "video ideas), write a complete Short script.\n\n"
     "Requirements:\n"
     "- Target 30-45 seconds of spoken content (roughly 75-120 words total "
     "across all segments).\n"
-    "- Open with a hook that grabs attention in the first 1-3 seconds - no "
-    "slow windups.\n"
+    "- Open with a hook that creates immediate clarity or curiosity in the "
+    "first 1-3 seconds: a specific, concrete claim or question. Never open "
+    "with a slow windup like 'In today's video' or a tired cliche like "
+    "'Did you know'.\n"
+    "- Be concrete and specific, never generic. Name actual tools, "
+    "features, numbers, or specific use cases rather than vague claims "
+    "like 'AI can boost your productivity'. If you can't be specific about "
+    "a point, cut it rather than pad with filler.\n"
+    "- NEVER INVENT A PRODUCT. Only name a specific tool, app, or product "
+    "if it is explicitly mentioned in the trend insights given to you (the "
+    "hooks, title patterns, or video ideas). If none is named there, "
+    "describe the feature or technique in general terms instead - do not "
+    "make up a plausible-sounding product name. A fabricated product is "
+    "worse than a generic claim, since it actively misleads viewers who "
+    "go looking for it.\n"
+    "- Avoid listicle cliches ('here are 5 ways', 'top tips you need', "
+    "'you won't believe'). Write like someone explaining something they "
+    "actually know well to a friend, not narrating a summary article.\n"
     "- Break the script into 4-8 segments. Each segment is one spoken beat, "
     "paired with a brief description of what should be shown on screen "
     "while it plays, written for an AI image generator (describe the scene "
     "or subject, not 'insert clip of X').\n"
-    "- End with a short call-to-action.\n"
+    "- End with a short call-to-action, phrased so the closing line can "
+    "loop naturally back into the opening hook - this adds rewatch value, "
+    "which matters for retention.\n"
     "- COPYRIGHT SAFETY IS MANDATORY: only write content producible with "
     "100% original material. Never write lyrics or dialogue lifted from "
     "existing copyrighted work. Never describe visuals that require "
@@ -69,7 +90,12 @@ class ScriptOutput(BaseModel):
     video_idea: str
     title: str
     hook: str
-    segments: list[ScriptSegmentOutput]
+    # min_length matches the "4-8 segments" instruction in
+    # SCRIPT_SYSTEM_PROMPT - enforced here (not just in the prompt) because
+    # a real Ollama generation was observed to return an empty list, which
+    # is schema-valid (a bare `list[...]` type has no minimum) but useless.
+    # Applies to every provider, not just Ollama - cheap insurance either way.
+    segments: list[ScriptSegmentOutput] = Field(min_length=4)
     cta: str
 
 

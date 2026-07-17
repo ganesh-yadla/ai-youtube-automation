@@ -20,9 +20,10 @@ class Settings(BaseSettings):
 
     youtube_api_key: str
 
-    llm_provider: Literal["claude", "gemini"] = Field(default="gemini")
+    llm_provider: Literal["claude", "gemini", "ollama"] = Field(default="gemini")
     anthropic_api_key: str | None = Field(default=None)
     gemini_api_key: str | None = Field(default=None)
+    ollama_base_url: str = Field(default="http://localhost:11434")
 
     trend_cache_ttl_seconds: int = Field(default=43200)  # 12 hours
 
