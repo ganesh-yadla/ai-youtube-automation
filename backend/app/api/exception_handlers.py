@@ -12,6 +12,7 @@ from app.exceptions.trend_exceptions import (
     TrendSearchNotFoundError,
     YouTubeAPIError,
 )
+from app.exceptions.voice_exceptions import NarrationAlreadyExistsError, NarrationNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -42,4 +43,14 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ScriptNotFoundError)
     async def handle_script_not_found(_: Request, exc: ScriptNotFoundError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(NarrationAlreadyExistsError)
+    async def handle_narration_already_exists(
+        _: Request, exc: NarrationAlreadyExistsError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(NarrationNotFoundError)
+    async def handle_narration_not_found(_: Request, exc: NarrationNotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})

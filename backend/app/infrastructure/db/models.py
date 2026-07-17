@@ -100,3 +100,23 @@ class VideoScript(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     search: Mapped["TrendSearch"] = relationship(back_populates="scripts")
+    narration: Mapped["VoiceNarration | None"] = relationship(
+        back_populates="script", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class VoiceNarration(Base):
+    """Generated per-segment audio for a VideoScript (1:1 - one narration per script)."""
+
+    __tablename__ = "voice_narrations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    script_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("video_scripts.id", ondelete="CASCADE"), unique=True, index=True
+    )
+
+    segments: Mapped[list] = mapped_column(JSONB)
+    voice_name: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    script: Mapped["VideoScript"] = relationship(back_populates="narration")

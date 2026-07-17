@@ -26,12 +26,21 @@ class Settings(BaseSettings):
 
     trend_cache_ttl_seconds: int = Field(default=43200)  # 12 hours
 
+    # Relative to the process working directory (backend/, per how uvicorn is
+    # run). Holds generated media - audio now, video/thumbnails later.
+    media_root: str = Field(default="media")
+
     @model_validator(mode="after")
     def _require_key_for_selected_provider(self) -> "Settings":
         if self.llm_provider == "claude" and not self.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER=claude")
-        if self.llm_provider == "gemini" and not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
+        # Unconditional, not just when LLM_PROVIDER=gemini: Voice Generation
+        # always uses Gemini's TTS regardless of LLM_PROVIDER, since Claude
+        # has no TTS integration.
+        if not self.gemini_api_key:
+            raise ValueError(
+                "GEMINI_API_KEY is required (default LLM provider, and always used for Voice Generation)"
+            )
         return self
 
 

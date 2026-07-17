@@ -21,6 +21,11 @@ async def db_session():
 
     async with session_factory() as session:
         yield session
+        # Tests that intentionally trigger a DB error (e.g. a uniqueness
+        # violation) leave the session's transaction rolled back server-side
+        # but not reset client-side - rollback() first or the cleanup query
+        # itself raises PendingRollbackError instead of running.
+        await session.rollback()
         await session.execute(text("TRUNCATE trend_searches CASCADE"))
         await session.commit()
 
