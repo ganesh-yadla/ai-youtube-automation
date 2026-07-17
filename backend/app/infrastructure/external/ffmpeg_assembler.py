@@ -1,12 +1,24 @@
 """ffmpeg-based implementation of VideoAssemblerInterface.
 
-UNVERIFIED against a live run: ffmpeg is not installed on the machine this
-was written on (confirmed via `ffmpeg -version` failing). The command
-shapes below follow standard, well-documented ffmpeg practice, but the
-exact drawtext font behavior in particular is environment-dependent (some
-ffmpeg builds require an explicit `fontfile` or fail with "No font file
-specified"). Treat this file as needing a real test render once ffmpeg is
-available, not as verified the way the Gemini SDK calls are.
+Verified against a real ffmpeg 8.1.2 render on Windows (5-segment script,
+real Gemini images + real Gemini TTS audio -> a valid 1080x1920 h264/aac
+mp4). Two real, environment-specific bugs were found and fixed during that
+verification, not just theorized:
+
+1. Windows absolute paths (e.g. C:/Users/...) break ffmpeg's filtergraph
+   parser even inside single-quoted option values, because ':' is a
+   filtergraph delimiter and the drive-letter colon isn't protected by the
+   quoting the way a mid-string colon would be. `_escape_filter_path`
+   escapes ':' as '\\:' for any path embedded in a filter string
+   (`textfile=`, `fontfile=`) - not needed for paths passed as plain -i
+   arguments, which aren't parsed as filtergraph syntax.
+2. This ffmpeg build has Fontconfig enabled but unconfigured on Windows,
+   so drawtext's automatic default-font resolution crashes the process
+   outright ("Fontconfig error: Cannot load default config file") instead
+   of failing gracefully. An explicit `font_file` is required on such
+   platforms - wired via `Settings.video_font_file` - and left unset on
+   platforms where ffmpeg resolves a default font on its own (most Linux
+   builds via a working fontconfig).
 
 Security: builds the argument list for asyncio.create_subprocess_exec
 directly (never shell=True, never a shell string), so there is no shell-
@@ -57,9 +69,10 @@ class FFmpegVideoAssembler:
             await self._concatenate(concat_list_path, Path(output_path))
 
     async def _render_scene(self, scene: VideoScene, caption_file: Path, output_path: Path) -> None:
-        fontfile_part = f":fontfile='{self._font_file}'" if self._font_file else ""
+        caption_path = self._escape_filter_path(caption_file.as_posix())
+        fontfile_part = f":fontfile='{self._escape_filter_path(self._font_file)}'" if self._font_file else ""
         drawtext = (
-            f"drawtext=textfile='{caption_file.as_posix()}'{fontfile_part}:"
+            f"drawtext=textfile='{caption_path}'{fontfile_part}:"
             "fontcolor=white:fontsize=56:borderw=3:bordercolor=black:"
             "x=(w-text_w)/2:y=h-300"
         )
@@ -108,6 +121,16 @@ class FFmpegVideoAssembler:
             str(output_path),
         ]
         await self._run(args)
+
+    @staticmethod
+    def _escape_filter_path(path: str) -> str:
+        # ffmpeg's filtergraph parser treats ':' as a delimiter even inside
+        # single-quoted option values - a real problem on Windows, where
+        # every absolute path starts with a drive letter followed by ':'
+        # (e.g. C:/Users/...). Confirmed via a real failing run: without
+        # this escape, ffmpeg's parser cuts the value off right after the
+        # drive letter and fails with "No option name near ...".
+        return path.replace(":", "\\:")
 
     @staticmethod
     async def _run(args: list[str]) -> None:

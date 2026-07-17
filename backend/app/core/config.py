@@ -27,8 +27,15 @@ class Settings(BaseSettings):
     trend_cache_ttl_seconds: int = Field(default=43200)  # 12 hours
 
     # Relative to the process working directory (backend/, per how uvicorn is
-    # run). Holds generated media - audio now, video/thumbnails later.
+    # run). Holds generated media - audio, images, video/thumbnails.
     media_root: str = Field(default="media")
+
+    # ffmpeg's drawtext filter needs an explicit font file on platforms
+    # without a working Fontconfig setup (confirmed via a real crash on
+    # Windows: "Fontconfig error: Cannot load default config file"). Leave
+    # unset on platforms where ffmpeg resolves a default font on its own
+    # (most Linux builds via fontconfig).
+    video_font_file: str | None = Field(default=None)
 
     @model_validator(mode="after")
     def _require_key_for_selected_provider(self) -> "Settings":

@@ -63,7 +63,8 @@ def get_image_client() -> ImageClientInterface:
 
 @lru_cache
 def get_video_assembler() -> VideoAssemblerInterface:
-    return FFmpegVideoAssembler()
+    settings = get_settings()
+    return FFmpegVideoAssembler(font_file=settings.video_font_file)
 
 
 def get_trend_repository(session: AsyncSession = Depends(get_db)) -> TrendRepository:
