@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     tts_provider: Literal["gemini", "piper"] = Field(default="gemini")
     piper_model_path: str = Field(default="models/piper/en_US-lessac-medium.onnx")
 
+    # Image generation is likewise its own capability/provider choice,
+    # independent of llm_provider and tts_provider.
+    image_provider: Literal["gemini", "local"] = Field(default="gemini")
+
     trend_cache_ttl_seconds: int = Field(default=43200)  # 12 hours
 
     # Relative to the process working directory (backend/, per how uvicorn is
@@ -48,11 +52,14 @@ class Settings(BaseSettings):
     def _require_key_for_selected_provider(self) -> "Settings":
         if self.llm_provider == "claude" and not self.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER=claude")
-        # Unconditional regardless of llm_provider/tts_provider: Visual
-        # Generation's image step always uses Gemini today (no local/other
-        # image provider exists yet).
-        if not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is required (always used for Visual Generation's image step)")
+        gemini_needed = (
+            self.llm_provider == "gemini" or self.tts_provider == "gemini" or self.image_provider == "gemini"
+        )
+        if gemini_needed and not self.gemini_api_key:
+            raise ValueError(
+                "GEMINI_API_KEY is required when LLM_PROVIDER, TTS_PROVIDER, or "
+                "IMAGE_PROVIDER is set to gemini"
+            )
         return self
 
 

@@ -19,6 +19,7 @@ from app.infrastructure.external.interfaces.image_client import ImageClientInter
 from app.infrastructure.external.interfaces.llm_client import LLMClientInterface
 from app.infrastructure.external.interfaces.tts_client import TTSClientInterface
 from app.infrastructure.external.interfaces.video_assembler import VideoAssemblerInterface
+from app.infrastructure.external.local_image_client import LocalImageClient
 from app.infrastructure.external.ollama_client import OllamaClient
 from app.infrastructure.external.piper_client import PiperClient
 from app.infrastructure.external.youtube_client import YoutubeClient
@@ -71,9 +72,16 @@ def get_tts_client() -> TTSClientInterface:
     return get_gemini_client()
 
 
+@lru_cache
+def get_local_image_client() -> LocalImageClient:
+    return LocalImageClient()
+
+
 def get_image_client() -> ImageClientInterface:
-    # Gemini is the only image provider today, regardless of LLM_PROVIDER -
-    # shares the connection with get_llm_client() when that's also Gemini.
+    settings = get_settings()
+    if settings.image_provider == "local":
+        return get_local_image_client()
+    # Shares the connection with get_llm_client() when that's also Gemini.
     return get_gemini_client()
 
 
