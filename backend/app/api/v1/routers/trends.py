@@ -6,9 +6,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
-from app.api.v1.dependencies import get_ai_analysis_service, get_trend_service
+from app.api.v1.dependencies import get_ai_analysis_service, get_script_service, get_trend_service
+from app.api.v1.schemas.script import ScriptGenerationRequest, ScriptResponse
 from app.api.v1.schemas.trend import TrendAnalysisResponse, TrendSearchRequest, TrendSearchResponse
 from app.services.ai_analysis_service import AIAnalysisService
+from app.services.script_service import ScriptService
 from app.services.trend_service import TrendService
 
 router = APIRouter(prefix="/trends", tags=["trends"])
@@ -43,3 +45,13 @@ async def get_trend_search(
 ) -> TrendSearchResponse:
     result = await service.get_by_id(search_id)
     return TrendSearchResponse.model_validate(result)
+
+
+@router.post("/{search_id}/script", response_model=ScriptResponse, status_code=status.HTTP_201_CREATED)
+async def generate_script(
+    search_id: UUID,
+    request: ScriptGenerationRequest,
+    service: ScriptService = Depends(get_script_service),
+) -> ScriptResponse:
+    result = await service.generate(search_id, video_idea=request.video_idea)
+    return ScriptResponse.model_validate(result)

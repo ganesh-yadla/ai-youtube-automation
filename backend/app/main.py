@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from app.api.exception_handlers import register_exception_handlers
 from app.api.v1.dependencies import get_claude_client, get_youtube_client
+from app.api.v1.routers.scripts import router as scripts_router
 from app.api.v1.routers.trends import router as trends_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
         return {"status": "ok", "environment": settings.environment}
 
     fastapi_app.include_router(trends_router, prefix="/api/v1")
+    fastapi_app.include_router(scripts_router, prefix="/api/v1")
     register_exception_handlers(fastapi_app)
 
     return fastapi_app

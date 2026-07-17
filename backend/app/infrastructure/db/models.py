@@ -29,6 +29,9 @@ class TrendSearch(Base):
     analysis: Mapped["TrendAnalysis | None"] = relationship(
         back_populates="search", cascade="all, delete-orphan", uselist=False
     )
+    scripts: Mapped[list["VideoScript"]] = relationship(
+        back_populates="search", cascade="all, delete-orphan"
+    )
 
 
 class TrendingVideo(Base):
@@ -76,3 +79,24 @@ class TrendAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     search: Mapped["TrendSearch"] = relationship(back_populates="analysis")
+
+
+class VideoScript(Base):
+    """An AI-generated script for one video idea from a TrendSearch (1:many)."""
+
+    __tablename__ = "video_scripts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    search_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("trend_searches.id", ondelete="CASCADE"), index=True
+    )
+
+    video_idea: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    hook: Mapped[str] = mapped_column(Text)
+    segments: Mapped[list] = mapped_column(JSONB)
+    cta: Mapped[str] = mapped_column(Text)
+    ai_model_used: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    search: Mapped["TrendSearch"] = relationship(back_populates="scripts")

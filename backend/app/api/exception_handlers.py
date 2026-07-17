@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.exceptions.script_exceptions import ScriptNotFoundError, TrendAnalysisRequiredError
 from app.exceptions.trend_exceptions import (
     NoTrendingVideosFoundError,
     TrendAnalysisAlreadyExistsError,
@@ -34,3 +35,11 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_youtube_api_error(_: Request, exc: YouTubeAPIError) -> JSONResponse:
         logger.error("youtube_api_error", extra={"error": str(exc)})
         return JSONResponse(status_code=502, content={"detail": "Upstream YouTube API error"})
+
+    @app.exception_handler(TrendAnalysisRequiredError)
+    async def handle_analysis_required(_: Request, exc: TrendAnalysisRequiredError) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    @app.exception_handler(ScriptNotFoundError)
+    async def handle_script_not_found(_: Request, exc: ScriptNotFoundError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})

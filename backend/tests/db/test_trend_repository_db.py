@@ -17,34 +17,12 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.domain.models.trend import TrendingVideo
 from app.repositories.trend_repository import TrendRepository
 
 pytestmark = pytest.mark.db
-
-
-@pytest.fixture
-async def db_session():
-    """A dedicated engine per test, bound to that test's event loop.
-
-    Reusing app.infrastructure.db.session's module-level engine singleton
-    here would break: pytest-asyncio gives each test function a fresh event
-    loop, but a module-level engine's connection pool is bound to whichever
-    loop first touched it, so later tests fail with "Event loop is closed".
-    """
-    engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-
-    async with session_factory() as session:
-        yield session
-        await session.execute(text("TRUNCATE trend_searches CASCADE"))
-        await session.commit()
-
-    await engine.dispose()
 
 
 def _make_video(rank: int, view_count: int = 1000) -> TrendingVideo:
