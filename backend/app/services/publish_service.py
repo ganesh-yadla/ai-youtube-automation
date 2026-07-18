@@ -18,7 +18,7 @@ from app.repositories.interfaces.voice_repository import VoiceRepositoryInterfac
 
 logger = logging.getLogger(__name__)
 
-_BASE_TAGS = ["Shorts", "AI Tools", "Ganuverse"]
+_BASE_TAGS = ["Shorts", "AI Tools", "AI World"]
 _TAG_STOP_WORDS = {
     "the", "a", "an", "to", "for", "of", "in", "on", "and", "or", "with",
     "your", "you", "how", "this", "that", "is", "are", "it", "using", "why",
@@ -93,7 +93,7 @@ class PublishService:
 
     @staticmethod
     def _build_description(hook: str, cta: str) -> str:
-        return f"{hook}\n\n{cta}\n\n#Shorts #AI #Ganuverse"
+        return f"{hook}\n\n{cta}\n\n#Shorts #AI #AIWorld"
 
     @staticmethod
     def _build_tags(title: str, video_idea: str) -> list[str]:

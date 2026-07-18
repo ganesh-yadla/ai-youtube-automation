@@ -1,4 +1,4 @@
-"""One-off script: generates the Ganuverse YouTube channel banner (channel art).
+"""One-off script: generates the AI World YouTube channel banner (channel art).
 
 Rendered directly with Pillow/numpy at YouTube's max recommended banner size
 (2560x1440), with the logo + wordmark kept inside the "safe area" (the
@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 WIDTH, HEIGHT = 2560, 1440
 CENTER_X, CENTER_Y = WIDTH // 2, HEIGHT // 2
 SAFE_W, SAFE_H = 1546, 423
-OUTPUT_PATH = Path(__file__).parent.parent / "ganuverse_banner.png"
+OUTPUT_PATH = Path(__file__).parent.parent / "ai_world_banner.png"
 
 # Same palette as the logo, for a consistent brand.
 COLOR_START = np.array([45, 12, 90])  # deep violet
@@ -56,7 +56,7 @@ def main() -> None:
     safe_top = CENTER_Y - SAFE_H // 2
     safe_bottom = CENTER_Y + SAFE_H // 2
 
-    # Icon: small G-monogram medallion, left side of the safe area.
+    # Icon: small AI-monogram medallion, left side of the safe area.
     icon_r = SAFE_H // 2 - 10
     icon_cx = safe_left + icon_r + 20
     icon_cy = CENTER_Y
@@ -71,17 +71,17 @@ def main() -> None:
     dot_x, dot_y = icon_cx + ring_r * 0.7, icon_cy - ring_r * 0.6
     draw.ellipse([dot_x - dot_r, dot_y - dot_r, dot_x + dot_r, dot_y + dot_r], fill=SATELLITE_COLOR)
 
-    g_font = _load_bold_font(int(icon_r * 1.5))
-    g_bbox = draw.textbbox((0, 0), "G", font=g_font)
-    g_w, g_h = g_bbox[2] - g_bbox[0], g_bbox[3] - g_bbox[1]
-    g_x = icon_cx - g_w / 2 - g_bbox[0]
-    g_y = icon_cy - g_h / 2 - g_bbox[1]
-    draw.text((g_x + 3, g_y + 4), "G", font=g_font, fill=SHADOW_COLOR)
-    draw.text((g_x, g_y), "G", font=g_font, fill=TEXT_COLOR)
+    icon_font = _load_bold_font(int(icon_r * 1.1))
+    icon_bbox = draw.textbbox((0, 0), "AI", font=icon_font)
+    icon_w, icon_h = icon_bbox[2] - icon_bbox[0], icon_bbox[3] - icon_bbox[1]
+    icon_x = icon_cx - icon_w / 2 - icon_bbox[0]
+    icon_y = icon_cy - icon_h / 2 - icon_bbox[1]
+    draw.text((icon_x + 3, icon_y + 4), "AI", font=icon_font, fill=SHADOW_COLOR)
+    draw.text((icon_x, icon_y), "AI", font=icon_font, fill=TEXT_COLOR)
 
-    # Wordmark: "GANUVERSE", right of the icon, vertically centered in the safe area.
+    # Wordmark: "AI WORLD", right of the icon, vertically centered in the safe area.
     wordmark_font = _load_bold_font(150)
-    text = "GANUVERSE"
+    text = "AI WORLD"
     text_bbox = draw.textbbox((0, 0), text, font=wordmark_font)
     text_w, text_h = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
     text_x = icon_cx + icon_r + 50

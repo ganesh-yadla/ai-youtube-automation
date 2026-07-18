@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ganuverse — Creator OS",
-  description: "Trend search, video generation, and YouTube publishing for Ganuverse.",
+  title: "AI World — Creator OS",
+  description: "Trend search, video generation, and YouTube publishing for AI World.",
 };
 
 export default function RootLayout({

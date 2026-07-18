@@ -1,8 +1,8 @@
-"""One-off script: generates the Ganuverse channel logo (profile picture).
+"""One-off script: generates the AI World channel logo (profile picture).
 
 Renders at full 800x800 (YouTube's recommended profile picture size) directly
 with Pillow, so there's no CSS-shrink-then-rasterize trap like the banner had
-earlier. Design is a monogram "G" + orbit ring so it stays legible once
+earlier. Design is a monogram "AI" + orbit ring so it stays legible once
 YouTube crops it to a circle and shrinks it to ~48px in the UI.
 """
 
@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 SIZE = 800
 CENTER = SIZE // 2
-OUTPUT_PATH = Path(__file__).parent.parent / "ganuverse_logo.png"
+OUTPUT_PATH = Path(__file__).parent.parent / "ai_world_logo.png"
 
 # Deep violet -> vivid magenta, diagonal. Bold/high-contrast on purpose -
 # matches what actually wins in the trending-thumbnail comparison (saturated
@@ -74,9 +74,9 @@ def main() -> None:
         fill=SATELLITE_COLOR,
     )
 
-    # Monogram "G", centered, with a soft drop shadow for depth.
-    font = _load_bold_font(440)
-    text = "G"
+    # Monogram "AI", centered, with a soft drop shadow for depth.
+    font = _load_bold_font(320)
+    text = "AI"
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     text_x = CENTER - text_w / 2 - bbox[0]

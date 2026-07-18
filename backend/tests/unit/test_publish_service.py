@@ -167,7 +167,7 @@ async def test_publish_uploads_with_metadata_from_script(tmp_path):
     assert result.youtube_video_id == "abc123"
     assert result.youtube_url == "https://youtu.be/abc123"
     assert publish_repo.create_calls[0]["video_id"] == video.id
-    assert "Ganuverse" in call["tags"]
+    assert "AI World" in call["tags"]
     assert "Saves" in call["tags"] or "saves" in [t.lower() for t in call["tags"]]
 
 
@@ -176,7 +176,7 @@ def test_build_tags_derives_keywords_from_title_and_idea_not_static_list():
         title="This AI Tool Saves Hours", video_idea="AI tools for productivity"
     )
 
-    assert tags[:3] == ["Shorts", "AI Tools", "Ganuverse"]
+    assert tags[:3] == ["Shorts", "AI Tools", "AI World"]
     assert "Saves" in tags
     assert "Hours" in tags
     assert "productivity" in tags
