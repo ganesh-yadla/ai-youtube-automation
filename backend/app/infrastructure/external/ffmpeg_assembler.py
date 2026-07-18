@@ -84,6 +84,19 @@ _CAPTION_BOTTOM_MARGIN = 100
 _THUMBNAIL_FONTSIZE = 90
 _THUMBNAIL_MAX_CHARS_PER_LINE = 16
 _HIGHLIGHT_PATTERN = re.compile(r"\d|%|\$")
+# Arial (and most system fonts we'd point `font_file` at) has no emoji
+# glyphs - a real generated title containing "📝💻" rendered as visible tofu
+# boxes on the thumbnail (confirmed via a real render, not theorized). LLMs
+# routinely add emoji for YouTube-style flair, so strip them before any text
+# reaches drawtext/Pillow rather than relying on the prompt to never ask.
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001f300-\U0001faff"  # pictographs, emoticons, transport, supplemental symbols
+    "\U00002600-\U000027bf"  # misc symbols and dingbats
+    "\U0001f1e6-\U0001f1ff"  # regional indicator letters (flag emoji)
+    "\U0000fe00-\U0000fe0f"  # variation selectors
+    "]+"
+)
 
 
 class FFmpegVideoAssembler:
@@ -187,7 +200,7 @@ class FFmpegVideoAssembler:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
             text_file = tmp_path / "thumbnail_text.txt"
-            wrapped_text = self._wrap_caption(text, _THUMBNAIL_MAX_CHARS_PER_LINE)
+            wrapped_text = self._wrap_caption(self._strip_emoji(text), _THUMBNAIL_MAX_CHARS_PER_LINE)
             text_file.write_text(wrapped_text, encoding="utf-8")
 
             text_path = self._escape_filter_path(text_file.as_posix())
@@ -256,7 +269,7 @@ class FFmpegVideoAssembler:
 
         lines: list[list[str]] = [[]]
         line_widths: list[float] = [0.0]
-        for word in text.split():
+        for word in FFmpegVideoAssembler._strip_emoji(text).split():
             word_width = measure_draw.textlength(word, font=font)
             current_words = lines[-1]
             added_width = (space_width if current_words else 0) + word_width
@@ -282,6 +295,10 @@ class FFmpegVideoAssembler:
                 placements.append((word, round(cursor_x), round(line_y), is_highlight))
                 cursor_x += measure_draw.textlength(word, font=font) + space_width
         return placements
+
+    @staticmethod
+    def _strip_emoji(text: str) -> str:
+        return _EMOJI_PATTERN.sub("", text)
 
     @staticmethod
     def _is_highlight_word(word: str) -> bool:

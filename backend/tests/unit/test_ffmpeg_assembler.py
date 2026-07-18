@@ -90,6 +90,23 @@ def test_layout_caption_wraps_to_multiple_lines_when_too_wide():
     assert len(y_values) > 1  # multiple distinct line y-positions means it actually wrapped
 
 
+def test_strip_emoji_removes_emoji_but_keeps_text():
+    result = FFmpegVideoAssembler._strip_emoji("3 Free AI Tools That Write Blog Posts for You 📝💻")
+
+    assert result == "3 Free AI Tools That Write Blog Posts for You "
+    assert "📝" not in result
+    assert "💻" not in result
+
+
+def test_layout_caption_strips_emoji_before_layout():
+    placements = FFmpegVideoAssembler._layout_caption(
+        "Try this 🔥 tool now", font_file=None, font_size=40, max_width=900, bottom_margin=100
+    )
+
+    words = [word for word, _, _, _ in placements]
+    assert words == ["Try", "this", "tool", "now"]
+
+
 def test_layout_caption_empty_text_returns_no_placements():
     result = FFmpegVideoAssembler._layout_caption(
         "", font_file=None, font_size=40, max_width=900, bottom_margin=100

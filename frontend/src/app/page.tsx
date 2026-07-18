@@ -10,7 +10,9 @@ import {
   type TrendSearch,
   type YoutubeUpload,
   generateInsights,
-  generateVideo,
+  generateScript,
+  generateVideoFromNarration,
+  generateVoice,
   mediaUrl,
   publishVideo,
   searchTrends,
@@ -21,12 +23,14 @@ type Step =
   | "searching"
   | "analyzing"
   | "ready"
+  | "generating_script"
+  | "script_review"
   | "generating"
   | "generated"
   | "publishing"
   | "published";
 
-const BUSY_STEPS: Step[] = ["searching", "analyzing", "generating", "publishing"];
+const BUSY_STEPS: Step[] = ["searching", "analyzing", "generating_script", "generating", "publishing"];
 
 // Rotated randomly by "Suggest Ideas" so you never have to type a keyword -
 // kept to the AI-tools-and-tips niche the channel is committed to, not a
@@ -47,6 +51,7 @@ export default function Home() {
   const [search, setSearch] = useState<TrendSearch | null>(null);
   const [analysis, setAnalysis] = useState<TrendAnalysis | null>(null);
   const [selectedIdea, setSelectedIdea] = useState("");
+  const [script, setScript] = useState<Script | null>(null);
   const [result, setResult] = useState<GenerateVideoResult | null>(null);
   const [upload, setUpload] = useState<YoutubeUpload | null>(null);
   const [step, setStep] = useState<Step>("idle");
@@ -58,6 +63,7 @@ export default function Home() {
     setError(null);
     setSearch(null);
     setAnalysis(null);
+    setScript(null);
     setResult(null);
     setUpload(null);
     setSelectedIdea("");
@@ -90,18 +96,40 @@ export default function Home() {
     void runSearch(randomKeyword);
   }
 
-  async function handleGenerate() {
+  // Generates the script only, and pauses here for review rather than
+  // running straight through to voice/video - a human sees every script
+  // before it's narrated, both to catch bad output early and because a
+  // pure one-click pipeline with zero human touch is the exact pattern
+  // YouTube's 2026 policy flags as "mass-produced, templated" content.
+  async function handleGenerateScript() {
     if (!search) return;
+
+    setError(null);
+    setScript(null);
+    setStep("generating_script");
+    try {
+      const generated = await generateScript(search.id, selectedIdea.trim() || null);
+      setScript(generated);
+      setStep("script_review");
+    } catch (err) {
+      setError(describeError(err, "Something went wrong generating the script."));
+      setStep("ready");
+    }
+  }
+
+  async function handleApproveScript() {
+    if (!script) return;
 
     setError(null);
     setStep("generating");
     try {
-      const generated = await generateVideo(search.id, selectedIdea.trim() || null);
-      setResult(generated);
+      const narration = await generateVoice(script.id);
+      const video = await generateVideoFromNarration(narration.id);
+      setResult({ script, video });
       setStep("generated");
     } catch (err) {
       setError(describeError(err, "Something went wrong generating the video."));
-      setStep("ready");
+      setStep("script_review");
     }
   }
 
@@ -212,12 +240,54 @@ export default function Home() {
 
           <button
             type="button"
-            onClick={handleGenerate}
+            onClick={handleGenerateScript}
             disabled={isBusy}
             className="self-start rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
           >
-            {step === "generating" ? "Generating video… (can take a couple minutes)" : "Generate Video"}
+            {step === "generating_script" ? "Writing script…" : "Generate Script"}
           </button>
+        </section>
+      )}
+
+      {script && !result && (
+        <section className="flex flex-col gap-4 border-t border-neutral-200 pt-6">
+          <div>
+            <h2 className="text-xs font-medium tracking-wide text-neutral-500 uppercase">
+              Review the script before it&apos;s narrated
+            </h2>
+            <p className="mt-1 font-medium">{script.title}</p>
+            <p className="mt-1 text-sm text-neutral-600">{script.hook}</p>
+          </div>
+
+          <ol className="flex flex-col gap-2">
+            {script.segments.map((segment, index) => (
+              <li key={index} className="rounded-md border border-neutral-200 px-3 py-2 text-sm">
+                <p>{segment.text}</p>
+                <p className="mt-1 text-xs text-neutral-400">{segment.visual_description}</p>
+              </li>
+            ))}
+          </ol>
+
+          <p className="text-sm text-neutral-600">{script.cta}</p>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleApproveScript}
+              disabled={isBusy}
+              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {step === "generating" ? "Generating video… (can take a couple minutes)" : "Approve & Generate Video"}
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerateScript}
+              disabled={isBusy}
+              className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 disabled:opacity-40"
+            >
+              Regenerate Script
+            </button>
+          </div>
         </section>
       )}
 

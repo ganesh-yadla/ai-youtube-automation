@@ -83,6 +83,20 @@ export interface Script {
   created_at: string;
 }
 
+export interface VoiceSegment {
+  segment_index: number;
+  audio_url: string;
+  duration_seconds: number;
+}
+
+export interface VoiceNarration {
+  id: string;
+  script_id: string;
+  segments: VoiceSegment[];
+  voice_name: string;
+  created_at: string;
+}
+
 export interface AssembledVideo {
   id: string;
   narration_id: string;
@@ -120,11 +134,32 @@ export function generateInsights(searchId: string): Promise<TrendAnalysis> {
   return request<TrendAnalysis>(`/api/v1/trends/${searchId}/insights`, { method: "POST" });
 }
 
+// Kept for programmatic/headless use (curl, scripts) even though the UI
+// now uses the granular generateScript -> generateVoice -> generateVideoFromNarration
+// flow below, so a human reviews the script before voice/video are generated.
 export function generateVideo(searchId: string, videoIdea: string | null): Promise<GenerateVideoResult> {
   return request<GenerateVideoResult>(`/api/v1/trends/${searchId}/generate-video`, {
     method: "POST",
     body: JSON.stringify({ video_idea: videoIdea }),
   });
+}
+
+export function generateScript(searchId: string, videoIdea: string | null): Promise<Script> {
+  return request<Script>(`/api/v1/trends/${searchId}/script`, {
+    method: "POST",
+    body: JSON.stringify({ video_idea: videoIdea }),
+  });
+}
+
+export function generateVoice(scriptId: string): Promise<VoiceNarration> {
+  return request<VoiceNarration>(`/api/v1/scripts/${scriptId}/voice`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function generateVideoFromNarration(narrationId: string): Promise<AssembledVideo> {
+  return request<AssembledVideo>(`/api/v1/voice-narrations/${narrationId}/video`, { method: "POST" });
 }
 
 export function publishVideo(videoId: string): Promise<YoutubeUpload> {
