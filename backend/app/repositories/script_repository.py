@@ -46,3 +46,9 @@ class ScriptRepository:
         script = result.scalar_one_or_none()
 
         return ScriptDomain.model_validate(script) if script else None
+
+    async def get_all_video_ideas(self) -> list[str]:
+        stmt = select(VideoScriptORM.video_idea, VideoScriptORM.title)
+        result = await self._session.execute(stmt)
+        rows = result.all()
+        return [value for row in rows for value in row if value]

@@ -28,6 +28,20 @@ type Step =
 
 const BUSY_STEPS: Step[] = ["searching", "analyzing", "generating", "publishing"];
 
+// Rotated randomly by "Suggest Ideas" so you never have to type a keyword -
+// kept to the AI-tools-and-tips niche the channel is committed to, not a
+// generic trending-anything list.
+const NICHE_KEYWORDS = [
+  "AI productivity tools",
+  "AI writing tools",
+  "AI video tools",
+  "AI coding tools",
+  "free AI tools",
+  "AI automation tools",
+  "new AI apps",
+  "AI tools for students",
+];
+
 export default function Home() {
   const [keyword, setKeyword] = useState("");
   const [search, setSearch] = useState<TrendSearch | null>(null);
@@ -40,11 +54,7 @@ export default function Home() {
 
   const isBusy = BUSY_STEPS.includes(step);
 
-  async function handleSearch(event: FormEvent) {
-    event.preventDefault();
-    const trimmedKeyword = keyword.trim();
-    if (!trimmedKeyword) return;
-
+  async function runSearch(searchKeyword: string) {
     setError(null);
     setSearch(null);
     setAnalysis(null);
@@ -54,7 +64,7 @@ export default function Home() {
 
     try {
       setStep("searching");
-      const searchResult = await searchTrends(trimmedKeyword);
+      const searchResult = await searchTrends(searchKeyword);
       setSearch(searchResult);
 
       setStep("analyzing");
@@ -65,6 +75,19 @@ export default function Home() {
       setError(describeError(err, "Something went wrong searching trends."));
       setStep("idle");
     }
+  }
+
+  function handleSearch(event: FormEvent) {
+    event.preventDefault();
+    const trimmedKeyword = keyword.trim();
+    if (!trimmedKeyword) return;
+    void runSearch(trimmedKeyword);
+  }
+
+  function handleSuggest() {
+    const randomKeyword = NICHE_KEYWORDS[Math.floor(Math.random() * NICHE_KEYWORDS.length)];
+    setKeyword(randomKeyword);
+    void runSearch(randomKeyword);
   }
 
   async function handleGenerate() {
@@ -104,22 +127,39 @@ export default function Home() {
         <p className="text-sm text-neutral-500">Find a trend, generate a Short, publish it.</p>
       </header>
 
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          placeholder="e.g. AI tools for productivity"
-          disabled={isBusy}
-          className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm disabled:opacity-50"
-        />
+      <div className="flex flex-col gap-3">
         <button
-          type="submit"
-          disabled={isBusy || !keyword.trim()}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+          type="button"
+          onClick={handleSuggest}
+          disabled={isBusy}
+          className="self-start rounded-md border border-neutral-900 px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-900 hover:text-white disabled:opacity-40"
         >
-          {step === "searching" ? "Searching…" : step === "analyzing" ? "Analyzing…" : "Find Trends"}
+          {step === "searching" || step === "analyzing" ? "Finding ideas…" : "✨ Suggest Ideas"}
         </button>
-      </form>
+
+        <div className="flex items-center gap-3 text-xs text-neutral-400">
+          <div className="h-px flex-1 bg-neutral-200" />
+          or search your own keyword
+          <div className="h-px flex-1 bg-neutral-200" />
+        </div>
+
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder="e.g. AI tools for productivity"
+            disabled={isBusy}
+            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={isBusy || !keyword.trim()}
+            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {step === "searching" ? "Searching…" : step === "analyzing" ? "Analyzing…" : "Find Trends"}
+          </button>
+        </form>
+      </div>
 
       {error && (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
@@ -138,6 +178,12 @@ export default function Home() {
             <h2 className="text-xs font-medium tracking-wide text-neutral-500 uppercase">
               Pick a video idea
             </h2>
+            {analysis.video_ideas.length === 0 && (
+              <p className="mt-1 text-sm text-neutral-500">
+                All the suggested ideas were too similar to videos you&apos;ve already made. Try
+                Suggest Ideas again, search a different keyword, or type your own idea below.
+              </p>
+            )}
             <div className="mt-2 flex flex-col gap-2">
               {analysis.video_ideas.map((idea) => (
                 <button

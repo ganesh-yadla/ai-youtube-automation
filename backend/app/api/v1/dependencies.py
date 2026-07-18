@@ -113,15 +113,18 @@ def get_trend_service(
     )
 
 
+def get_script_repository(session: AsyncSession = Depends(get_db)) -> ScriptRepository:
+    return ScriptRepository(session)
+
+
 def get_ai_analysis_service(
     llm_client: LLMClientInterface = Depends(get_llm_client),
     repository: TrendRepository = Depends(get_trend_repository),
+    script_repository: ScriptRepository = Depends(get_script_repository),
 ) -> AIAnalysisService:
-    return AIAnalysisService(llm_client=llm_client, repository=repository)
-
-
-def get_script_repository(session: AsyncSession = Depends(get_db)) -> ScriptRepository:
-    return ScriptRepository(session)
+    return AIAnalysisService(
+        llm_client=llm_client, repository=repository, script_repository=script_repository
+    )
 
 
 def get_script_service(

@@ -1,6 +1,7 @@
 """Business logic for generating AI insights over a TrendSearch's videos."""
 
 import logging
+from difflib import SequenceMatcher
 from uuid import UUID
 
 from app.domain.models.trend import TrendAnalysis as TrendAnalysisDomain
@@ -11,37 +12,49 @@ from app.exceptions.trend_exceptions import (
     TrendSearchNotFoundError,
 )
 from app.infrastructure.external.interfaces.llm_client import LLMClientInterface
+from app.repositories.interfaces.script_repository import ScriptRepositoryInterface
 from app.repositories.interfaces.trend_repository import TrendRepositoryInterface
 
 logger = logging.getLogger(__name__)
+
+# Ratio from difflib.SequenceMatcher - not semantic similarity (no
+# embeddings/ML infra for that), just close-text-match detection. Good
+# enough to catch near-identical rephrasings without new dependencies;
+# won't catch conceptually-similar ideas phrased very differently.
+_DUPLICATE_SIMILARITY_THRESHOLD = 0.6
 
 
 class AIAnalysisService:
     """Orchestrates: load a TrendSearch, build a prompt, call the LLM, persist insights."""
 
-    def __init__(self, llm_client: LLMClientInterface, repository: TrendRepositoryInterface) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClientInterface,
+        repository: TrendRepositoryInterface,
+        script_repository: ScriptRepositoryInterface,
+    ) -> None:
         self._llm_client = llm_client
         self._repository = repository
+        self._script_repository = script_repository
 
     async def analyze(self, search_id: UUID) -> TrendAnalysisDomain:
         search = await self._repository.get_search(search_id)
         if search is None:
             raise TrendSearchNotFoundError(f"No trend search found with id '{search_id}'")
         if search.analysis is not None:
-            raise TrendAnalysisAlreadyExistsError(
-                f"Trend search '{search_id}' has already been analyzed"
-            )
+            raise TrendAnalysisAlreadyExistsError(f"Trend search '{search_id}' has already been analyzed")
         if not search.videos:
             raise NoTrendingVideosFoundError(f"Trend search '{search_id}' has no videos to analyze")
 
-        logger.info(
-            "trend_analysis_started", extra={"search_id": str(search_id), "keyword": search.keyword}
-        )
+        logger.info("trend_analysis_started", extra={"search_id": str(search_id), "keyword": search.keyword})
 
         prompt = self._build_prompt(search.keyword, search.videos)
         insights = await self._llm_client.analyze_trending_videos(prompt)
 
-        return await self._repository.save_analysis(
+        # Persist the AI's full, unfiltered suggestions - only what's
+        # returned to the caller is filtered for channel-wide uniqueness,
+        # so the raw record stays complete if ever inspected later.
+        analysis = await self._repository.save_analysis(
             search_id=search_id,
             why_performing=insights.why_performing,
             common_hooks=insights.common_hooks,
@@ -50,6 +63,19 @@ class AIAnalysisService:
             content_gaps=insights.content_gaps,
             video_ideas=insights.video_ideas,
             ai_model_used=self._llm_client.model_name,
+        )
+
+        existing_ideas = await self._script_repository.get_all_video_ideas()
+        unique_ideas = [idea for idea in analysis.video_ideas if not self._is_duplicate(idea, existing_ideas)]
+        return analysis.model_copy(update={"video_ideas": unique_ideas})
+
+    @staticmethod
+    def _is_duplicate(candidate: str, existing: list[str]) -> bool:
+        candidate_normalized = candidate.strip().lower()
+        return any(
+            SequenceMatcher(None, candidate_normalized, existing_text.strip().lower()).ratio()
+            >= _DUPLICATE_SIMILARITY_THRESHOLD
+            for existing_text in existing
         )
 
     @staticmethod

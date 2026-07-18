@@ -52,7 +52,9 @@ class FakeRepository:
         video_ideas,
         ai_model_used,
     ) -> TrendAnalysisDomain:
-        self.saved_calls.append({"search_id": search_id, "ai_model_used": ai_model_used})
+        self.saved_calls.append(
+            {"search_id": search_id, "ai_model_used": ai_model_used, "video_ideas": video_ideas}
+        )
         return TrendAnalysisDomain(
             id=uuid4(),
             search_id=search_id,
@@ -65,6 +67,14 @@ class FakeRepository:
             ai_model_used=ai_model_used,
             created_at=datetime.now(UTC),
         )
+
+
+class FakeScriptRepository:
+    def __init__(self, existing_ideas: list[str] | None = None) -> None:
+        self.existing_ideas = existing_ideas or []
+
+    async def get_all_video_ideas(self) -> list[str]:
+        return self.existing_ideas
 
 
 def _make_video(title: str, rank: int) -> TrendingVideo:
@@ -113,7 +123,7 @@ async def test_analyze_persists_insights_from_claude(sample_insights):
     search = _make_search([_make_video("Top AI Tools", 1), _make_video("AI Tools Review", 2)])
     llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(search)
-    service = AIAnalysisService(llm_client, repository)
+    service = AIAnalysisService(llm_client, repository, FakeScriptRepository())
 
     result = await service.analyze(search.id)
 
@@ -127,7 +137,7 @@ async def test_analyze_builds_prompt_with_video_metadata(sample_insights):
     search = _make_search([_make_video("Top AI Tools", 1)])
     llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(search)
-    service = AIAnalysisService(llm_client, repository)
+    service = AIAnalysisService(llm_client, repository, FakeScriptRepository())
 
     await service.analyze(search.id)
 
@@ -141,7 +151,7 @@ async def test_analyze_builds_prompt_with_video_metadata(sample_insights):
 async def test_analyze_raises_when_search_not_found(sample_insights):
     llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(None)
-    service = AIAnalysisService(llm_client, repository)
+    service = AIAnalysisService(llm_client, repository, FakeScriptRepository())
 
     with pytest.raises(TrendSearchNotFoundError):
         await service.analyze(uuid4())
@@ -165,7 +175,7 @@ async def test_analyze_raises_when_already_analyzed(sample_insights):
     search = _make_search([_make_video("Top AI Tools", 1)], analysis=existing_analysis)
     llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(search)
-    service = AIAnalysisService(llm_client, repository)
+    service = AIAnalysisService(llm_client, repository, FakeScriptRepository())
 
     with pytest.raises(TrendAnalysisAlreadyExistsError):
         await service.analyze(search.id)
@@ -173,11 +183,56 @@ async def test_analyze_raises_when_already_analyzed(sample_insights):
     assert llm_client.calls == 0
 
 
+async def test_analyze_filters_out_ideas_too_similar_to_existing_scripts():
+    insights = TrendInsights(
+        why_performing="x",
+        common_hooks=[],
+        common_title_patterns=[],
+        common_thumbnail_patterns=[],
+        content_gaps=[],
+        video_ideas=[
+            "Top 5 AI Tools for Beginners in 2026",
+            "How to Automate Your Inbox with AI",
+        ],
+    )
+    search = _make_search([_make_video("Top AI Tools", 1)])
+    llm_client = FakeLLMClient(insights)
+    repository = FakeRepository(search)
+    # Near-identical (case/wording) to the first idea - should be filtered.
+    script_repository = FakeScriptRepository(existing_ideas=["Top 5 AI tools for beginners 2026"])
+    service = AIAnalysisService(llm_client, repository, script_repository)
+
+    result = await service.analyze(search.id)
+
+    assert result.video_ideas == ["How to Automate Your Inbox with AI"]
+
+
+async def test_analyze_persists_full_unfiltered_ideas_even_when_some_are_duplicates():
+    insights = TrendInsights(
+        why_performing="x",
+        common_hooks=[],
+        common_title_patterns=[],
+        common_thumbnail_patterns=[],
+        content_gaps=[],
+        video_ideas=["Top 5 AI Tools for Beginners in 2026"],
+    )
+    search = _make_search([_make_video("Top AI Tools", 1)])
+    llm_client = FakeLLMClient(insights)
+    repository = FakeRepository(search)
+    script_repository = FakeScriptRepository(existing_ideas=["Top 5 AI tools for beginners 2026"])
+    service = AIAnalysisService(llm_client, repository, script_repository)
+
+    result = await service.analyze(search.id)
+
+    assert result.video_ideas == []
+    assert repository.saved_calls[0]["video_ideas"] == ["Top 5 AI Tools for Beginners in 2026"]
+
+
 async def test_analyze_raises_when_search_has_no_videos(sample_insights):
     search = _make_search([])
     llm_client = FakeLLMClient(sample_insights)
     repository = FakeRepository(search)
-    service = AIAnalysisService(llm_client, repository)
+    service = AIAnalysisService(llm_client, repository, FakeScriptRepository())
 
     with pytest.raises(NoTrendingVideosFoundError):
         await service.analyze(search.id)

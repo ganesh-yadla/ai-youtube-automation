@@ -19,3 +19,11 @@ class ScriptRepositoryInterface(Protocol):
     ) -> Script: ...
 
     async def get_script(self, script_id: UUID) -> Script | None: ...
+
+    async def get_all_video_ideas(self) -> list[str]:
+        """Every video_idea + title ever generated, across all searches -
+        used to filter out near-duplicate suggestions before they reach
+        the user, not scoped to one search since the goal is channel-wide
+        uniqueness.
+        """
+        ...

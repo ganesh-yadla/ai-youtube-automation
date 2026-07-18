@@ -117,3 +117,45 @@ async def test_get_script_returns_none_for_unknown_id(db_session: AsyncSession):
     result = await repository.get_script(uuid4())
 
     assert result is None
+
+
+async def test_get_all_video_ideas_returns_ideas_and_titles_across_searches(db_session: AsyncSession):
+    """Regression guard: uniqueness filtering needs ideas from every
+    search, not scoped to one - two different searches' scripts must both
+    show up.
+    """
+    search_one = await _make_search(db_session)
+    search_two = await _make_search(db_session)
+    repository = ScriptRepository(db_session)
+    segment = [ScriptSegment(text="beat", visual_description="visual")]
+
+    await repository.create_script(
+        search_id=search_one.id,
+        video_idea="idea one",
+        title="title one",
+        hook="hook",
+        segments=segment,
+        cta="cta",
+        ai_model_used="llama3.1:8b",
+    )
+    await repository.create_script(
+        search_id=search_two.id,
+        video_idea="idea two",
+        title="title two",
+        hook="hook",
+        segments=segment,
+        cta="cta",
+        ai_model_used="llama3.1:8b",
+    )
+
+    result = await repository.get_all_video_ideas()
+
+    assert set(result) >= {"idea one", "title one", "idea two", "title two"}
+
+
+async def test_get_all_video_ideas_returns_empty_list_when_no_scripts_exist(db_session: AsyncSession):
+    repository = ScriptRepository(db_session)
+
+    result = await repository.get_all_video_ideas()
+
+    assert result == []
