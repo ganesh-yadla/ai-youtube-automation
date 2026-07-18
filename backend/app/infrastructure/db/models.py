@@ -29,9 +29,7 @@ class TrendSearch(Base):
     analysis: Mapped["TrendAnalysis | None"] = relationship(
         back_populates="search", cascade="all, delete-orphan", uselist=False
     )
-    scripts: Mapped[list["VideoScript"]] = relationship(
-        back_populates="search", cascade="all, delete-orphan"
-    )
+    scripts: Mapped[list["VideoScript"]] = relationship(back_populates="search", cascade="all, delete-orphan")
 
 
 class TrendingVideo(Base):
@@ -141,3 +139,23 @@ class AssembledVideo(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     narration: Mapped["VoiceNarration"] = relationship(back_populates="video")
+    upload: Mapped["YoutubeUpload | None"] = relationship(
+        back_populates="video", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class YoutubeUpload(Base):
+    """The published-to-YouTube record for an AssembledVideo (1:1 - one upload per video)."""
+
+    __tablename__ = "youtube_uploads"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    video_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("assembled_videos.id", ondelete="CASCADE"), unique=True, index=True
+    )
+
+    youtube_video_id: Mapped[str] = mapped_column(Text)
+    youtube_url: Mapped[str] = mapped_column(Text)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    video: Mapped["AssembledVideo"] = relationship(back_populates="upload")

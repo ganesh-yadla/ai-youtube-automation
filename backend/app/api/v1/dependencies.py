@@ -23,11 +23,14 @@ from app.infrastructure.external.local_image_client import LocalImageClient
 from app.infrastructure.external.ollama_client import OllamaClient
 from app.infrastructure.external.piper_client import PiperClient
 from app.infrastructure.external.youtube_client import YoutubeClient
+from app.infrastructure.external.youtube_upload_client import YoutubeUploadClient
+from app.repositories.publish_repository import PublishRepository
 from app.repositories.script_repository import ScriptRepository
 from app.repositories.trend_repository import TrendRepository
 from app.repositories.video_repository import VideoRepository
 from app.repositories.voice_repository import VoiceRepository
 from app.services.ai_analysis_service import AIAnalysisService
+from app.services.publish_service import PublishService
 from app.services.script_service import ScriptService
 from app.services.trend_service import TrendService
 from app.services.video_service import VideoService
@@ -169,4 +172,32 @@ def get_video_service(
         voice_repository=voice_repository,
         video_repository=video_repository,
         media_root=settings.media_root,
+    )
+
+
+@lru_cache
+def get_youtube_upload_client() -> YoutubeUploadClient:
+    return YoutubeUploadClient()
+
+
+def get_publish_repository(session: AsyncSession = Depends(get_db)) -> PublishRepository:
+    return PublishRepository(session)
+
+
+def get_publish_service(
+    upload_client: YoutubeUploadClient = Depends(get_youtube_upload_client),
+    video_repository: VideoRepository = Depends(get_video_repository),
+    voice_repository: VoiceRepository = Depends(get_voice_repository),
+    script_repository: ScriptRepository = Depends(get_script_repository),
+    publish_repository: PublishRepository = Depends(get_publish_repository),
+    settings: Settings = Depends(get_settings),
+) -> PublishService:
+    return PublishService(
+        upload_client=upload_client,
+        video_repository=video_repository,
+        voice_repository=voice_repository,
+        script_repository=script_repository,
+        publish_repository=publish_repository,
+        media_root=settings.media_root,
+        category_id=settings.youtube_category_id,
     )

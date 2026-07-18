@@ -8,7 +8,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.api.exception_handlers import register_exception_handlers
-from app.api.v1.dependencies import get_gemini_client, get_llm_client, get_youtube_client
+from app.api.v1.dependencies import (
+    get_gemini_client,
+    get_llm_client,
+    get_youtube_client,
+    get_youtube_upload_client,
+)
 from app.api.v1.routers.scripts import router as scripts_router
 from app.api.v1.routers.trends import router as trends_router
 from app.api.v1.routers.video import router as video_router
@@ -23,6 +28,7 @@ from app.infrastructure.db.session import engine
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     yield
     await get_youtube_client().close()
+    await get_youtube_upload_client().close()
     await get_llm_client().close()
     # get_llm_client() only closes this when LLM_PROVIDER=gemini - Gemini is
     # also always used for TTS regardless, so close it unconditionally too.

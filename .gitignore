@@ -31,3 +31,7 @@ backend/media/
 # Downloaded local model weights (Piper voices, etc.) - large binaries,
 # fetched via `python -m piper.download_voices`, not source
 backend/models/
+
+# YouTube OAuth credentials - real secrets, never committed
+backend/client_secrets.json
+backend/token.json

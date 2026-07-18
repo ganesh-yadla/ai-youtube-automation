@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.exceptions.publish_exceptions import VideoAlreadyPublishedError, YoutubeUploadError
 from app.exceptions.script_exceptions import ScriptNotFoundError, TrendAnalysisRequiredError
 from app.exceptions.trend_exceptions import (
     NoTrendingVideosFoundError,
@@ -61,3 +62,12 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(VideoNotFoundError)
     async def handle_video_not_found(_: Request, exc: VideoNotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(VideoAlreadyPublishedError)
+    async def handle_video_already_published(_: Request, exc: VideoAlreadyPublishedError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(YoutubeUploadError)
+    async def handle_youtube_upload_error(_: Request, exc: YoutubeUploadError) -> JSONResponse:
+        logger.error("youtube_upload_error", extra={"error": str(exc)})
+        return JSONResponse(status_code=502, content={"detail": str(exc)})

@@ -21,6 +21,9 @@ dependencies = [
     "diffusers>=0.39",
     "transformers>=5.14",
     "accelerate>=1.14",
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.4",
+    "google-auth-httplib2>=0.4",
 ]
 
 [project.optional-dependencies]

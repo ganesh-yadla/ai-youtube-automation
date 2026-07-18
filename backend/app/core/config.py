@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0")
 
     youtube_api_key: str
+    youtube_token_path: str = Field(default="token.json")
+    youtube_category_id: str = Field(default="28")  # Science & Technology
 
     llm_provider: Literal["claude", "gemini", "ollama"] = Field(default="gemini")
     anthropic_api_key: str | None = Field(default=None)
