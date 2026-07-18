@@ -80,11 +80,23 @@ class VideoService:
                 )
             )
 
-        thumbnail_bytes = await self._image_client.generate_image(
-            self._thumbnail_prompt(script.title, script.hook), aspect_ratio=_ASPECT_RATIO
+        # No text in the generation prompt - AI image models render text as
+        # pixel shapes, not real typography (a real thumbnail once came back
+        # with "isn't" rendered as "IS'N'T"). The real title is burned on
+        # top afterward via ffmpeg, which draws actual, correctly-spelled
+        # characters.
+        thumbnail_background_bytes = await self._image_client.generate_image(
+            self._thumbnail_background_prompt(script.hook), aspect_ratio=_ASPECT_RATIO
         )
+        thumbnail_background_path = f"{images_relative_dir}/thumbnail_background.png"
+        (self._media_root / thumbnail_background_path).write_bytes(thumbnail_background_bytes)
+
         thumbnail_relative_path = f"{video_relative_dir}/thumbnail.png"
-        (self._media_root / thumbnail_relative_path).write_bytes(thumbnail_bytes)
+        await self._video_assembler.render_thumbnail(
+            image_path=str(self._media_root / thumbnail_background_path),
+            text=script.title,
+            output_path=str(self._media_root / thumbnail_relative_path),
+        )
 
         video_relative_path = f"{video_relative_dir}/final.mp4"
         video_output_path = self._media_root / video_relative_path
@@ -108,9 +120,10 @@ class VideoService:
         return await self._video_repository.get_video(video_id)
 
     @staticmethod
-    def _thumbnail_prompt(title: str, hook: str) -> str:
+    def _thumbnail_background_prompt(hook: str) -> str:
         return (
-            f'A scroll-stopping YouTube Shorts thumbnail for a video titled "{title}". '
-            f'The hook is: "{hook}". Bold, high-contrast, eye-catching composition with '
-            "large readable text conveying the core idea. Vertical format."
+            f'A scroll-stopping YouTube Shorts thumbnail background for a video about: "{hook}". '
+            "Bold, high-contrast, visually striking composition with a clear focal subject "
+            "and empty space where large title text will be overlaid afterward. "
+            "No text, no words, no letters, no numbers anywhere in the image - background only."
         )

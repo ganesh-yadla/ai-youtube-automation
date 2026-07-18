@@ -25,3 +25,15 @@ class VideoAssemblerInterface(Protocol):
         one video file written to output_path.
         """
         ...
+
+    async def render_thumbnail(self, image_path: str, text: str, output_path: str) -> None:
+        """Overlays real, correctly-spelled text onto a background image and
+        writes the result to output_path.
+
+        Text is burned in by ffmpeg, not painted by the image model - AI
+        image generation renders text as pixel shapes, not real typography,
+        which produced real typos in testing (e.g. "isn't" -> "IS'N'T").
+        image_path should be a clean background with no text requested in
+        its generation prompt.
+        """
+        ...

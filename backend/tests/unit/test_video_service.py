@@ -37,9 +37,13 @@ class FakeImageClient:
 class FakeVideoAssembler:
     def __init__(self) -> None:
         self.calls: list[tuple[list[VideoScene], str]] = []
+        self.thumbnail_calls: list[tuple[str, str, str]] = []
 
     async def assemble(self, scenes: list[VideoScene], output_path: str) -> None:
         self.calls.append((scenes, output_path))
+
+    async def render_thumbnail(self, image_path: str, text: str, output_path: str) -> None:
+        self.thumbnail_calls.append((image_path, text, output_path))
 
 
 class FakeScriptRepository:
@@ -170,6 +174,22 @@ async def test_generate_assembles_scenes_with_matching_audio_and_captions(tmp_pa
     assert scenes[0].caption_text == "Segment 0 text"
     expected_audio_path = tmp_path / narration.segments[0].audio_file_path
     assert Path(scenes[0].audio_path) == expected_audio_path
+
+
+async def test_generate_requests_a_textless_thumbnail_background_and_overlays_real_title(tmp_path):
+    script = _make_script(segment_count=2)
+    narration = _make_narration(script.id, segment_count=2)
+    service, image_client, assembler, _ = _make_service(tmp_path, script, narration)
+
+    await service.generate(narration.id)
+
+    thumbnail_prompt = image_client.prompts[-1]
+    assert "no text" in thumbnail_prompt.lower()
+    assert script.title not in thumbnail_prompt
+
+    assert len(assembler.thumbnail_calls) == 1
+    _image_path, text, _output_path = assembler.thumbnail_calls[0]
+    assert text == script.title
 
 
 async def test_generate_persists_video_with_summed_duration(tmp_path):

@@ -26,6 +26,13 @@ just theorized:
    margin so it grows upward as more lines are added instead of overflowing
    past the bottom of the frame.
 
+`render_thumbnail` exists because AI-generated images render text as pixel
+shapes, not real typography - a real thumbnail generated with "isn't" in
+the prompt came back as "IS'N'T". VideoService now generates a clean
+background image with no text requested, then this method burns the real,
+correctly-spelled title onto it via drawtext, reusing the same
+_wrap_caption/_escape_filter_path helpers already proven reliable above.
+
 Security: builds the argument list for asyncio.create_subprocess_exec
 directly (never shell=True, never a shell string), so there is no shell-
 injection surface regardless of what an AI-generated caption contains.
@@ -45,6 +52,8 @@ _VIDEO_WIDTH = 1080
 _VIDEO_HEIGHT = 1920
 _CAPTION_FONTSIZE = 56
 _CAPTION_MAX_CHARS_PER_LINE = 28
+_THUMBNAIL_FONTSIZE = 90
+_THUMBNAIL_MAX_CHARS_PER_LINE = 16
 
 
 class FFmpegVideoAssembler:
@@ -114,6 +123,41 @@ class FFmpegVideoAssembler:
             str(output_path),
         ]
         await self._run(args)
+
+    async def render_thumbnail(self, image_path: str, text: str, output_path: str) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            text_file = tmp_path / "thumbnail_text.txt"
+            wrapped_text = self._wrap_caption(text, _THUMBNAIL_MAX_CHARS_PER_LINE)
+            text_file.write_text(wrapped_text, encoding="utf-8")
+
+            text_path = self._escape_filter_path(text_file.as_posix())
+            escaped_font_file = self._escape_filter_path(self._font_file) if self._font_file else None
+            fontfile_part = f":fontfile='{escaped_font_file}'" if escaped_font_file else ""
+            drawtext = (
+                f"drawtext=textfile='{text_path}'{fontfile_part}:"
+                f"fontcolor=white:fontsize={_THUMBNAIL_FONTSIZE}:borderw=6:bordercolor=black:"
+                "x=(w-text_w)/2:y=(h-text_h)/2"
+            )
+            video_filter = (
+                f"scale={_VIDEO_WIDTH}:{_VIDEO_HEIGHT}:force_original_aspect_ratio=increase,"
+                f"crop={_VIDEO_WIDTH}:{_VIDEO_HEIGHT},{drawtext}"
+            )
+
+            resolved_output_path = Path(output_path)
+            resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+            args = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                image_path,
+                "-vf",
+                video_filter,
+                "-frames:v",
+                "1",
+                str(resolved_output_path),
+            ]
+            await self._run(args)
 
     async def _concatenate(self, concat_list_path: Path, output_path: Path) -> None:
         args = [
