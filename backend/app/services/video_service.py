@@ -125,5 +125,7 @@ class VideoService:
             f'A scroll-stopping YouTube Shorts thumbnail background for a video about: "{hook}". '
             "Bold, high-contrast, visually striking composition with a clear focal subject "
             "and empty space where large title text will be overlaid afterward. "
+            "Clean, uncluttered setting - a minimal studio backdrop, a tidy modern workspace, "
+            "or a bold solid/gradient background. Never a messy or chaotic environment. "
             "No text, no words, no letters, no numbers anywhere in the image - background only."
         )

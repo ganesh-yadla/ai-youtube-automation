@@ -40,20 +40,50 @@ Caption text is written to a temp file and referenced via drawtext's
 `textfile` parameter rather than embedded in the filter string - ffmpeg's
 filtergraph syntax treats colons, single quotes, and backslashes as
 delimiters, and natural-language captions routinely contain all three.
+
+In-video captions highlight numbers/emphasis words in a different color
+(the pattern that's actually winning on competing thumbnails - bold
+colored numbers, not uniform white text). A single `drawtext` filter can
+only paint one fontcolor, so this started as one drawtext filter per word
+with pre-computed pixel positions - but a real render caught a real bug:
+per-word drawtext filters don't share a baseline. Each word's `y` positions
+that word's own ink bounding box, and a word with no ascenders/descenders
+(e.g. "one") gets a visibly smaller box than a neighboring word with tall
+letters (e.g. "week"), so it renders smaller and higher - not a fixed
+offset, so there's no per-word fudge that fixes it in general. Captions are
+now composited instead: `_render_caption_overlay` draws every word onto one
+transparent PNG via Pillow, anchored to a shared font baseline
+(`anchor="ls"`), and that PNG is overlaid onto the scaled frame with
+ffmpeg's `overlay` filter. Bonus: caption text no longer touches ffmpeg's
+filtergraph parser at all, which removes an entire class of escaping bugs
+(see bug #1 below) for this path.
+
+`_layout_caption` still does the pixel-accurate word-wrap/positioning math
+(via the same font metrics), it just feeds Pillow now instead of feeding
+one drawtext filter per word.
 """
 
 import asyncio
+import re
 import tempfile
 from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
 
 from app.infrastructure.external.interfaces.video_assembler import VideoScene
 
 _VIDEO_WIDTH = 1080
 _VIDEO_HEIGHT = 1920
 _CAPTION_FONTSIZE = 56
-_CAPTION_MAX_CHARS_PER_LINE = 28
+_CAPTION_COLOR = (255, 255, 255, 255)
+_CAPTION_HIGHLIGHT_COLOR = (0, 224, 255, 255)  # brand accent cyan - numbers/emphasis words
+_CAPTION_STROKE_COLOR = (0, 0, 0, 255)
+_CAPTION_STROKE_WIDTH = 3
+_CAPTION_SIDE_MARGIN = 60
+_CAPTION_BOTTOM_MARGIN = 100
 _THUMBNAIL_FONTSIZE = 90
 _THUMBNAIL_MAX_CHARS_PER_LINE = 16
+_HIGHLIGHT_PATTERN = re.compile(r"\d|%|\$")
 
 
 class FFmpegVideoAssembler:
@@ -70,12 +100,8 @@ class FFmpegVideoAssembler:
             clip_paths: list[Path] = []
 
             for index, scene in enumerate(scenes):
-                caption_file = tmp_path / f"caption_{index}.txt"
-                wrapped_caption = self._wrap_caption(scene.caption_text, _CAPTION_MAX_CHARS_PER_LINE)
-                caption_file.write_text(wrapped_caption, encoding="utf-8")
-
                 clip_path = tmp_path / f"clip_{index}.mp4"
-                await self._render_scene(scene, caption_file, clip_path)
+                await self._render_scene(scene, tmp_path, index, clip_path)
                 clip_paths.append(clip_path)
 
             concat_list_path = tmp_path / "concat_list.txt"
@@ -86,17 +112,13 @@ class FFmpegVideoAssembler:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             await self._concatenate(concat_list_path, Path(output_path))
 
-    async def _render_scene(self, scene: VideoScene, caption_file: Path, output_path: Path) -> None:
-        caption_path = self._escape_filter_path(caption_file.as_posix())
-        fontfile_part = f":fontfile='{self._escape_filter_path(self._font_file)}'" if self._font_file else ""
-        drawtext = (
-            f"drawtext=textfile='{caption_path}'{fontfile_part}:"
-            f"fontcolor=white:fontsize={_CAPTION_FONTSIZE}:borderw=3:bordercolor=black:"
-            "x=(w-text_w)/2:y=h-text_h-100"
-        )
-        video_filter = (
-            f"scale={_VIDEO_WIDTH}:{_VIDEO_HEIGHT}:force_original_aspect_ratio=increase,"
-            f"crop={_VIDEO_WIDTH}:{_VIDEO_HEIGHT},{drawtext}"
+    async def _render_scene(self, scene: VideoScene, tmp_path: Path, index: int, output_path: Path) -> None:
+        overlay_path = tmp_path / f"caption_overlay_{index}.png"
+        self._render_caption_overlay(scene.caption_text, self._font_file, _CAPTION_FONTSIZE, overlay_path)
+
+        filter_complex = (
+            f"[0:v]scale={_VIDEO_WIDTH}:{_VIDEO_HEIGHT}:force_original_aspect_ratio=increase,"
+            f"crop={_VIDEO_WIDTH}:{_VIDEO_HEIGHT}[bg];[bg][1:v]overlay=0:0[outv]"
         )
         args = [
             "ffmpeg",
@@ -106,9 +128,15 @@ class FFmpegVideoAssembler:
             "-i",
             scene.image_path,
             "-i",
+            str(overlay_path),
+            "-i",
             scene.audio_path,
-            "-vf",
-            video_filter,
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            "[outv]",
+            "-map",
+            "2:a",
             "-c:v",
             "libx264",
             "-tune",
@@ -123,6 +151,37 @@ class FFmpegVideoAssembler:
             str(output_path),
         ]
         await self._run(args)
+
+    @staticmethod
+    def _render_caption_overlay(text: str, font_file: str | None, font_size: int, output_path: Path) -> None:
+        placements = FFmpegVideoAssembler._layout_caption(
+            text,
+            font_file=font_file,
+            font_size=font_size,
+            max_width=_VIDEO_WIDTH - 2 * _CAPTION_SIDE_MARGIN,
+            bottom_margin=_CAPTION_BOTTOM_MARGIN,
+        )
+        image = Image.new("RGBA", (_VIDEO_WIDTH, _VIDEO_HEIGHT), (0, 0, 0, 0))
+        if placements:
+            font = (
+                ImageFont.truetype(font_file, font_size)
+                if font_file
+                else ImageFont.load_default(font_size)
+            )
+            draw = ImageDraw.Draw(image)
+            ascent, _descent = font.getmetrics()
+            for word, x, line_top_y, is_highlight in placements:
+                color = _CAPTION_HIGHLIGHT_COLOR if is_highlight else _CAPTION_COLOR
+                draw.text(
+                    (x, line_top_y + ascent),
+                    word,
+                    font=font,
+                    fill=color,
+                    stroke_width=_CAPTION_STROKE_WIDTH,
+                    stroke_fill=_CAPTION_STROKE_COLOR,
+                    anchor="ls",
+                )
+        image.save(output_path)
 
     async def render_thumbnail(self, image_path: str, text: str, output_path: str) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -174,6 +233,68 @@ class FFmpegVideoAssembler:
             str(output_path),
         ]
         await self._run(args)
+
+    @staticmethod
+    def _layout_caption(
+        text: str,
+        font_file: str | None,
+        font_size: int,
+        max_width: int,
+        bottom_margin: int,
+    ) -> list[tuple[str, int, int, bool]]:
+        """Lays out `text` into (word, x, y, is_highlight) placements, wrapped
+        to `max_width` pixels and bottom-anchored so the block grows upward
+        as lines are added - the same anchoring `_render_scene` used to get
+        from ffmpeg's `y=h-text_h-100`, now computed here since ffmpeg can no
+        longer measure the whole block itself (each word is its own filter).
+        """
+        font = ImageFont.truetype(font_file, font_size) if font_file else ImageFont.load_default(font_size)
+        measure_draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        space_width = measure_draw.textlength(" ", font=font)
+        ascent, descent = font.getmetrics()
+        line_height = int((ascent + descent) * 1.3)
+
+        lines: list[list[str]] = [[]]
+        line_widths: list[float] = [0.0]
+        for word in text.split():
+            word_width = measure_draw.textlength(word, font=font)
+            current_words = lines[-1]
+            added_width = (space_width if current_words else 0) + word_width
+            if current_words and line_widths[-1] + added_width > max_width:
+                lines.append([word])
+                line_widths.append(word_width)
+            else:
+                current_words.append(word)
+                line_widths[-1] += added_width
+
+        if not lines[0]:
+            return []
+
+        block_height = len(lines) * line_height
+        start_y = _VIDEO_HEIGHT - bottom_margin - block_height
+
+        placements: list[tuple[str, int, int, bool]] = []
+        for line_index, words in enumerate(lines):
+            line_y = start_y + line_index * line_height
+            cursor_x = (_VIDEO_WIDTH - line_widths[line_index]) / 2
+            for word in words:
+                is_highlight = FFmpegVideoAssembler._is_highlight_word(word)
+                placements.append((word, round(cursor_x), round(line_y), is_highlight))
+                cursor_x += measure_draw.textlength(word, font=font) + space_width
+        return placements
+
+    @staticmethod
+    def _is_highlight_word(word: str) -> bool:
+        # Numbers/currency/percent (the pattern that's actually winning on
+        # competing thumbnails - "$77,675", "22,000", "4000 Watch Hours")
+        # plus ALL-CAPS words the script deliberately emphasized.
+        stripped = word.strip(".,!?;:\"'()")
+        if _HIGHLIGHT_PATTERN.search(stripped):
+            return True
+        # 3+ letters, not 2 - excludes common short acronyms like "AI"/"TV"
+        # that would otherwise get flagged on nearly every caption in this
+        # niche, diluting the highlight into meaninglessness.
+        return len(stripped) >= 3 and stripped.isalpha() and stripped.isupper()
 
     @staticmethod
     def _wrap_caption(text: str, max_chars_per_line: int) -> str:

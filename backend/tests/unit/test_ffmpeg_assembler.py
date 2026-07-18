@@ -43,3 +43,56 @@ def test_wrap_caption_empty_string_returns_empty_string():
     result = FFmpegVideoAssembler._wrap_caption("", max_chars_per_line=28)
 
     assert result == ""
+
+
+def test_is_highlight_word_flags_numbers_currency_and_percent():
+    assert FFmpegVideoAssembler._is_highlight_word("22,000")
+    assert FFmpegVideoAssembler._is_highlight_word("$77,675.45")
+    assert FFmpegVideoAssembler._is_highlight_word("50%")
+    assert FFmpegVideoAssembler._is_highlight_word("4000")
+
+
+def test_is_highlight_word_flags_all_caps_emphasis():
+    assert FFmpegVideoAssembler._is_highlight_word("NEVER")
+    assert FFmpegVideoAssembler._is_highlight_word("FREE.")
+
+
+def test_is_highlight_word_ignores_ordinary_words():
+    assert not FFmpegVideoAssembler._is_highlight_word("tools")
+    # 2-letter acronyms like "AI" are common noise in this niche, not emphasis
+    assert not FFmpegVideoAssembler._is_highlight_word("AI")
+    assert not FFmpegVideoAssembler._is_highlight_word("Automate")
+
+
+def test_layout_caption_places_every_word_and_flags_highlights():
+    placements = FFmpegVideoAssembler._layout_caption(
+        "I saved $500 in one week",
+        font_file=None,
+        font_size=40,
+        max_width=900,
+        bottom_margin=100,
+    )
+
+    words = [word for word, _, _, _ in placements]
+    assert words == ["I", "saved", "$500", "in", "one", "week"]
+    highlight_flags = {word: is_highlight for word, _, _, is_highlight in placements}
+    assert highlight_flags["$500"] is True
+    assert highlight_flags["saved"] is False
+
+
+def test_layout_caption_wraps_to_multiple_lines_when_too_wide():
+    long_text = "This is a fairly long caption that should not fit on a single line at this width"
+    placements = FFmpegVideoAssembler._layout_caption(
+        long_text, font_file=None, font_size=40, max_width=200, bottom_margin=100
+    )
+
+    y_values = {y for _, _, y, _ in placements}
+    assert len(y_values) > 1  # multiple distinct line y-positions means it actually wrapped
+
+
+def test_layout_caption_empty_text_returns_no_placements():
+    result = FFmpegVideoAssembler._layout_caption(
+        "", font_file=None, font_size=40, max_width=900, bottom_margin=100
+    )
+
+    assert result == []
