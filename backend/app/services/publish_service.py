@@ -38,6 +38,7 @@ class PublishService:
         publish_repository: PublishRepositoryInterface,
         media_root: str,
         category_id: str,
+        content_language: str = "en",
     ) -> None:
         self._upload_client = upload_client
         self._video_repository = video_repository
@@ -46,6 +47,7 @@ class PublishService:
         self._publish_repository = publish_repository
         self._media_root = Path(media_root)
         self._category_id = category_id
+        self._content_language = content_language
 
     async def publish(self, video_id: UUID) -> YoutubeUpload:
         video = await self._video_repository.get_video(video_id)
@@ -73,6 +75,7 @@ class PublishService:
             tags=self._build_tags(script.title, script.video_idea),
             category_id=self._category_id,
             thumbnail_path=str(self._media_root / video.thumbnail_file_path),
+            default_language=self._content_language,
         )
         youtube_url = f"https://youtu.be/{youtube_video_id}"
 

@@ -34,7 +34,14 @@ class PiperClient:
 
     def __init__(self, voice: PiperVoice | None = None) -> None:
         settings = get_settings()
-        self._voice = voice or PiperVoice.load(settings.piper_model_path)
+        # Whole-channel mode, not per-request - matches the config's own
+        # content_language semantics (see Settings.content_language).
+        model_path = (
+            settings.piper_model_path_te
+            if settings.content_language == "te"
+            else settings.piper_model_path
+        )
+        self._voice = voice or PiperVoice.load(model_path)
 
     async def generate_speech(self, text: str, voice_name: str = DEFAULT_VOICE_NAME) -> bytes:
         return await asyncio.to_thread(self._synthesize, text)

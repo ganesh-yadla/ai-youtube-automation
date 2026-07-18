@@ -14,6 +14,17 @@ from app.repositories.interfaces.trend_repository import TrendRepositoryInterfac
 
 logger = logging.getLogger(__name__)
 
+_LANGUAGE_INSTRUCTIONS = {
+    "te": (
+        "Write the ENTIRE script - title, hook, every segment, and CTA - in Telugu, using "
+        "native Telugu script (Unicode), never transliterated Roman letters. Write naturally, "
+        "the way a fluent Telugu tech creator actually speaks, not a stiff word-for-word "
+        "translation from English. Product/brand names and commonly-used English tech loanwords "
+        "(e.g. AI, app names) may stay in English if that's how a Telugu speaker would actually "
+        "say them - everything else must be Telugu.\n\n"
+    ),
+}
+
 
 class ScriptService:
     """Orchestrates: load a TrendSearch's analysis, generate a script via the LLM, persist it."""
@@ -23,10 +34,12 @@ class ScriptService:
         llm_client: LLMClientInterface,
         trend_repository: TrendRepositoryInterface,
         script_repository: ScriptRepositoryInterface,
+        content_language: str = "en",
     ) -> None:
         self._llm_client = llm_client
         self._trend_repository = trend_repository
         self._script_repository = script_repository
+        self._content_language = content_language
 
     async def generate(self, search_id: UUID, video_idea: str | None = None) -> ScriptDomain:
         search = await self._trend_repository.get_search(search_id)
@@ -42,7 +55,7 @@ class ScriptService:
             extra={"search_id": str(search_id), "keyword": search.keyword},
         )
 
-        prompt = self._build_prompt(search.keyword, search.analysis, video_idea)
+        prompt = self._build_prompt(search.keyword, search.analysis, video_idea, self._content_language)
         output = await self._llm_client.generate_script(prompt)
 
         segments = [
@@ -64,15 +77,19 @@ class ScriptService:
         return await self._script_repository.get_script(script_id)
 
     @staticmethod
-    def _build_prompt(keyword: str, analysis: TrendAnalysis, video_idea: str | None) -> str:
+    def _build_prompt(
+        keyword: str, analysis: TrendAnalysis, video_idea: str | None, content_language: str
+    ) -> str:
         idea_instruction = (
             f'Write the script for this specific video idea: "{video_idea}"'
             if video_idea
             else "No specific video idea was given - select or adapt the strongest original "
             "idea from the suggested video ideas below."
         )
+        language_instruction = _LANGUAGE_INSTRUCTIONS.get(content_language, "")
 
         return (
+            f"{language_instruction}"
             f'Keyword: "{keyword}"\n\n'
             f"Why similar videos perform well: {analysis.why_performing}\n\n"
             f"Common hooks: {', '.join(analysis.common_hooks)}\n"

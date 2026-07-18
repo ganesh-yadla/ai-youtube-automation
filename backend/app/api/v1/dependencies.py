@@ -56,6 +56,11 @@ def get_ollama_client() -> OllamaClient:
 @lru_cache
 def get_llm_client() -> LLMClientInterface:
     settings = get_settings()
+    if settings.content_language == "te":
+        # Script quality was tested for real, side by side: Ollama's Telugu
+        # is valid but noticeably rougher than Gemini's for the same
+        # prompt - not a place to default to the cheaper local option.
+        return get_gemini_client()
     if settings.llm_provider == "gemini":
         return get_gemini_client()
     if settings.llm_provider == "ollama":
@@ -131,11 +136,13 @@ def get_script_service(
     llm_client: LLMClientInterface = Depends(get_llm_client),
     trend_repository: TrendRepository = Depends(get_trend_repository),
     script_repository: ScriptRepository = Depends(get_script_repository),
+    settings: Settings = Depends(get_settings),
 ) -> ScriptService:
     return ScriptService(
         llm_client=llm_client,
         trend_repository=trend_repository,
         script_repository=script_repository,
+        content_language=settings.content_language,
     )
 
 
@@ -214,4 +221,5 @@ def get_publish_service(
         publish_repository=publish_repository,
         media_root=settings.media_root,
         category_id=settings.youtube_category_id,
+        content_language=settings.content_language,
     )

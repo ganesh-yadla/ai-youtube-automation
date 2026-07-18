@@ -160,6 +160,33 @@ async def test_generate_uses_claude_resolved_idea_when_none_given(sample_output)
     assert result.video_idea == sample_output.video_idea
 
 
+async def test_generate_prompt_includes_telugu_instruction_when_content_language_is_te(sample_output):
+    analysis = _make_analysis()
+    search = _make_search(analysis)
+    llm_client = FakeLLMClient(sample_output)
+    service = ScriptService(
+        llm_client, FakeTrendRepository(search), FakeScriptRepository(), content_language="te"
+    )
+
+    await service.generate(search.id)
+
+    assert llm_client.last_prompt is not None
+    assert "in Telugu" in llm_client.last_prompt
+    assert "native Telugu script" in llm_client.last_prompt
+
+
+async def test_generate_prompt_omits_language_instruction_for_default_english(sample_output):
+    analysis = _make_analysis()
+    search = _make_search(analysis)
+    llm_client = FakeLLMClient(sample_output)
+    service = ScriptService(llm_client, FakeTrendRepository(search), FakeScriptRepository())
+
+    await service.generate(search.id)
+
+    assert llm_client.last_prompt is not None
+    assert "Telugu" not in llm_client.last_prompt
+
+
 async def test_generate_raises_when_search_not_found(sample_output):
     llm_client = FakeLLMClient(sample_output)
     service = ScriptService(llm_client, FakeTrendRepository(None), FakeScriptRepository())

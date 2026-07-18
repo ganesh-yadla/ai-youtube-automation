@@ -28,7 +28,7 @@ class FakeUploadClient:
         self.calls: list[dict] = []
 
     async def upload_video(
-        self, video_path, title, description, tags, category_id, thumbnail_path=None
+        self, video_path, title, description, tags, category_id, thumbnail_path=None, default_language=None
     ) -> str:
         self.calls.append(
             {
@@ -38,6 +38,7 @@ class FakeUploadClient:
                 "tags": tags,
                 "category_id": category_id,
                 "thumbnail_path": thumbnail_path,
+                "default_language": default_language,
             }
         )
         return self.youtube_video_id
@@ -132,6 +133,7 @@ def _make_service(
     narration: VoiceNarrationDomain | None,
     script: ScriptDomain | None,
     existing_upload: YoutubeUploadDomain | None = None,
+    content_language: str = "en",
 ):
     upload_client = FakeUploadClient()
     publish_repo = FakePublishRepository(existing=existing_upload)
@@ -143,6 +145,7 @@ def _make_service(
         publish_repository=publish_repo,
         media_root=str(tmp_path),
         category_id="28",
+        content_language=content_language,
     )
     return service, upload_client, publish_repo
 
@@ -180,6 +183,19 @@ def test_build_tags_derives_keywords_from_title_and_idea_not_static_list():
     # stop words and short/duplicate tokens shouldn't pollute the tag list
     assert "for" not in tags
     assert tags.count("AI") <= 1
+
+
+async def test_publish_sets_default_language_from_content_language_setting(tmp_path):
+    script = _make_script()
+    narration = _make_narration(script.id)
+    video = _make_video(narration.id)
+    service, upload_client, _ = _make_service(
+        tmp_path, video, narration, script, content_language="te"
+    )
+
+    await service.publish(video.id)
+
+    assert upload_client.calls[0]["default_language"] == "te"
 
 
 async def test_publish_raises_when_video_not_found(tmp_path):

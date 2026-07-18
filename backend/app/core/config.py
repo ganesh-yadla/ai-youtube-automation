@@ -33,10 +33,23 @@ class Settings(BaseSettings):
     # ollama for scripts doesn't imply local TTS, and vice versa.
     tts_provider: Literal["gemini", "piper"] = Field(default="gemini")
     piper_model_path: str = Field(default="models/piper/en_US-lessac-medium.onnx")
+    # Only needed when content_language="te" - a real Piper Telugu voice
+    # (e.g. te_IN-maya-medium.onnx), verified by actually synthesizing
+    # Telugu speech with it, not just confirming the file downloads.
+    piper_model_path_te: str | None = Field(default=None)
 
     # Image generation is likewise its own capability/provider choice,
     # independent of llm_provider and tts_provider.
     image_provider: Literal["gemini", "local"] = Field(default="gemini")
+
+    # Whole-channel mode, not per-video - matches the actual plan (Telugu
+    # audience first, other languages later), not simultaneous multi-
+    # language output. When "te", script generation is forced to Gemini
+    # regardless of llm_provider: a real side-by-side test showed Ollama's
+    # Telugu is valid but noticeably rougher than Gemini's for the same
+    # prompt, and script quality isn't a place to default to the cheaper
+    # option for a language the operator can't easily proofread.
+    content_language: Literal["en", "te"] = Field(default="en")
 
     trend_cache_ttl_seconds: int = Field(default=43200)  # 12 hours
 
@@ -56,12 +69,19 @@ class Settings(BaseSettings):
         if self.llm_provider == "claude" and not self.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER=claude")
         gemini_needed = (
-            self.llm_provider == "gemini" or self.tts_provider == "gemini" or self.image_provider == "gemini"
+            self.llm_provider == "gemini"
+            or self.tts_provider == "gemini"
+            or self.image_provider == "gemini"
+            or self.content_language == "te"  # script generation is forced to Gemini for Telugu
         )
         if gemini_needed and not self.gemini_api_key:
             raise ValueError(
                 "GEMINI_API_KEY is required when LLM_PROVIDER, TTS_PROVIDER, or "
-                "IMAGE_PROVIDER is set to gemini"
+                "IMAGE_PROVIDER is set to gemini, or when CONTENT_LANGUAGE=te"
+            )
+        if self.content_language == "te" and not self.piper_model_path_te and self.tts_provider == "piper":
+            raise ValueError(
+                "PIPER_MODEL_PATH_TE is required when CONTENT_LANGUAGE=te and TTS_PROVIDER=piper"
             )
         return self
 

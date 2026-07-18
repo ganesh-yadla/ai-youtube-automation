@@ -62,6 +62,7 @@ class YoutubeUploadClient:
         tags: list[str],
         category_id: str,
         thumbnail_path: str | None = None,
+        default_language: str | None = None,
     ) -> str:
         if not self._token_path.exists():
             raise YoutubeUploadError(
@@ -70,7 +71,7 @@ class YoutubeUploadClient:
 
         access_token = await self._get_access_token()
         video_id = await self._upload_video_file(
-            access_token, video_path, title, description, tags, category_id
+            access_token, video_path, title, description, tags, category_id, default_language
         )
 
         if thumbnail_path:
@@ -109,15 +110,24 @@ class YoutubeUploadClient:
         description: str,
         tags: list[str],
         category_id: str,
+        default_language: str | None,
     ) -> str:
         video_bytes = Path(video_path).read_bytes()
+        snippet = {
+            "title": title,
+            "description": description,
+            "tags": tags,
+            "categoryId": category_id,
+        }
+        if default_language:
+            # Matters for reaching a non-English audience through YouTube's
+            # own language-based search/recommendation - a video with
+            # Telugu audio but no language metadata is easy for YouTube to
+            # miscategorize as English content.
+            snippet["defaultLanguage"] = default_language
+            snippet["defaultAudioLanguage"] = default_language
         metadata = {
-            "snippet": {
-                "title": title,
-                "description": description,
-                "tags": tags,
-                "categoryId": category_id,
-            },
+            "snippet": snippet,
             "status": {"privacyStatus": "private"},
         }
 
