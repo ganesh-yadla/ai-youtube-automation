@@ -19,7 +19,7 @@ from app.repositories.interfaces.voice_repository import VoiceRepositoryInterfac
 
 logger = logging.getLogger(__name__)
 
-_BASE_TAGS = ["Shorts", "AI Tools", "AI World"]
+_BASE_TAGS = ["Shorts", "AI World"]
 _TAG_STOP_WORDS = {
     "the", "a", "an", "to", "for", "of", "in", "on", "and", "or", "with",
     "your", "you", "how", "this", "that", "is", "are", "it", "using", "why",
@@ -110,11 +110,13 @@ class PublishService:
 
     @staticmethod
     def _build_tags(title: str, video_idea: str) -> list[str]:
-        # The same 3 static tags on every upload is itself a templating
+        # The same static tags on every upload is itself a templating
         # signal (see YouTube's 2026 crackdown on "mass-produced, templated"
         # channels) - deriving tags from each video's own title/idea instead
         # keeps every upload's metadata genuinely distinct without needing
-        # an extra LLM call.
+        # an extra LLM call. Kept to channel-level tags only (Shorts, AI
+        # World) - no single topic tag like "AI Tools" fits every video
+        # now that the channel spans 5 different content categories.
         words = re.findall(r"[A-Za-z0-9]+", f"{title} {video_idea}")
         keyword_tags: list[str] = []
         seen: set[str] = set()

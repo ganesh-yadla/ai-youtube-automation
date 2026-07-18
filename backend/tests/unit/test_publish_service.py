@@ -215,7 +215,7 @@ def test_build_tags_derives_keywords_from_title_and_idea_not_static_list():
         title="This AI Tool Saves Hours", video_idea="AI tools for productivity"
     )
 
-    assert tags[:3] == ["Shorts", "AI Tools", "AI World"]
+    assert tags[:2] == ["Shorts", "AI World"]
     assert "Saves" in tags
     assert "Hours" in tags
     assert "productivity" in tags

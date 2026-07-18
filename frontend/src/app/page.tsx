@@ -32,18 +32,20 @@ type Step =
 
 const BUSY_STEPS: Step[] = ["searching", "analyzing", "generating_script", "generating", "publishing"];
 
-// Rotated randomly by "Suggest Ideas" so you never have to type a keyword -
-// kept to the AI-tools-and-tips niche the channel is committed to, not a
-// generic trending-anything list.
-const NICHE_KEYWORDS = [
-  "AI productivity tools",
-  "AI writing tools",
-  "AI video tools",
-  "AI coding tools",
-  "free AI tools",
-  "AI automation tools",
-  "new AI apps",
-  "AI tools for students",
+// The channel's core content calendar - 5 rotating categories, posted
+// daily. Each maps to a search keyword so the existing trend-search flow
+// (search real trending videos in this keyword -> analyze -> suggest
+// ideas) works unchanged for every category, not just AI tools. Picking
+// which category to post is a manual, deliberate choice for now (not
+// randomized, not scheduled) - daily rotation/no-repeat tracking across
+// categories is still manual; the uniqueness filter already in the
+// pipeline catches repeats within a category and across all of them.
+const CONTENT_CATEGORIES = [
+  { label: "Motivational Speech", keyword: "AI motivational speech shorts" },
+  { label: "Animal Facts", keyword: "AI animal facts shorts" },
+  { label: "Fitness", keyword: "AI fitness tips shorts" },
+  { label: "Facts", keyword: "AI interesting facts shorts" },
+  { label: "Stories", keyword: "AI short stories shorts" },
 ];
 
 export default function Home() {
@@ -90,10 +92,9 @@ export default function Home() {
     void runSearch(trimmedKeyword);
   }
 
-  function handleSuggest() {
-    const randomKeyword = NICHE_KEYWORDS[Math.floor(Math.random() * NICHE_KEYWORDS.length)];
-    setKeyword(randomKeyword);
-    void runSearch(randomKeyword);
+  function handleCategorySelect(categoryKeyword: string) {
+    setKeyword(categoryKeyword);
+    void runSearch(categoryKeyword);
   }
 
   // Generates the script only, and pauses here for review rather than
@@ -152,18 +153,35 @@ export default function Home() {
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
       <header>
         <h1 className="text-2xl font-semibold">AI World</h1>
-        <p className="text-sm text-neutral-500">Find a trend, generate a Short, publish it.</p>
+        <p className="text-sm text-neutral-500">Pick today&apos;s category, generate a Short, publish it.</p>
       </header>
 
       <div className="flex flex-col gap-3">
-        <button
-          type="button"
-          onClick={handleSuggest}
-          disabled={isBusy}
-          className="self-start rounded-md border border-neutral-900 px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-900 hover:text-white disabled:opacity-40"
-        >
-          {step === "searching" || step === "analyzing" ? "Finding ideas…" : "✨ Suggest Ideas"}
-        </button>
+        <h2 className="text-xs font-medium tracking-wide text-neutral-500 uppercase">
+          Today&apos;s category
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {CONTENT_CATEGORIES.map((category) => (
+            <button
+              key={category.label}
+              type="button"
+              onClick={() => handleCategorySelect(category.keyword)}
+              disabled={isBusy}
+              className={`rounded-md border px-4 py-2 text-sm font-medium transition disabled:opacity-40 ${
+                keyword === category.keyword
+                  ? "border-neutral-900 bg-neutral-900 text-white"
+                  : "border-neutral-900 text-neutral-900 hover:bg-neutral-900 hover:text-white"
+              }`}
+            >
+              {category.label}
+            </button>
+          ))}
+        </div>
+        {(step === "searching" || step === "analyzing") && (
+          <p className="text-xs text-neutral-400">
+            {step === "searching" ? "Searching trends…" : "Analyzing what's working…"}
+          </p>
+        )}
 
         <div className="flex items-center gap-3 text-xs text-neutral-400">
           <div className="h-px flex-1 bg-neutral-200" />
@@ -175,7 +193,7 @@ export default function Home() {
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="e.g. AI tools for productivity"
+            placeholder="e.g. AI travel facts shorts"
             disabled={isBusy}
             className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm disabled:opacity-50"
           />
@@ -209,7 +227,7 @@ export default function Home() {
             {analysis.video_ideas.length === 0 && (
               <p className="mt-1 text-sm text-neutral-500">
                 All the suggested ideas were too similar to videos you&apos;ve already made. Try
-                Suggest Ideas again, search a different keyword, or type your own idea below.
+                a different category, search a different keyword, or type your own idea below.
               </p>
             )}
             <div className="mt-2 flex flex-col gap-2">
