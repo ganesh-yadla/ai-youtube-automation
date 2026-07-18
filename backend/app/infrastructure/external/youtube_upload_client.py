@@ -1,5 +1,22 @@
 """Thin async wrapper over the YouTube Data API v3's resumable upload
-protocol. Uploads a video and (best-effort) sets its custom thumbnail.
+protocol. Uploads a video and (best-effort) sets its custom thumbnail and
+caption track.
+
+Caption upload (captions.insert) is why SCOPES uses youtube.force-ssl
+instead of the narrower youtube.upload used previously - force-ssl also
+covers videos.insert, so one scope replaces two rather than needing both.
+Existing tokens obtained under the old scope do not have caption-upload
+permission; scripts/authorize_youtube.py must be re-run once to pick up
+the wider scope.
+
+The resumable-upload protocol (init with X-Upload-Content-* headers, then
+PUT the raw bytes to the returned session URL) is used for captions the
+same way it's used for videos - the Data API reference docs for
+captions.insert don't explicitly document which upload types it supports,
+but the generic Google API media-upload protocol is consistent across
+insert-with-media endpoints, and this mirrors the already-proven
+videos.insert implementation rather than introducing a different
+multipart/related body format untested anywhere else in this codebase.
 
 Deliberately not using google-api-python-client, matching YoutubeClient's
 existing rationale (see youtube_client.py): raw httpx keeps this
@@ -40,7 +57,7 @@ from app.core.config import get_settings
 from app.exceptions.publish_exceptions import YoutubeUploadError
 
 UPLOAD_BASE_URL = "https://www.googleapis.com/upload/youtube/v3"
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +78,11 @@ class YoutubeUploadClient:
         description: str,
         tags: list[str],
         category_id: str,
+        contains_synthetic_media: bool,
         thumbnail_path: str | None = None,
         default_language: str | None = None,
+        caption_content: str | None = None,
+        caption_language: str | None = None,
     ) -> str:
         if not self._token_path.exists():
             raise YoutubeUploadError(
@@ -71,7 +91,14 @@ class YoutubeUploadClient:
 
         access_token = await self._get_access_token()
         video_id = await self._upload_video_file(
-            access_token, video_path, title, description, tags, category_id, default_language
+            access_token,
+            video_path,
+            title,
+            description,
+            tags,
+            category_id,
+            contains_synthetic_media,
+            default_language,
         )
 
         if thumbnail_path:
@@ -83,6 +110,17 @@ class YoutubeUploadClient:
                 # Custom thumbnails require a phone-verified channel, which
                 # may not be true for every account.
                 logger.warning("thumbnail_upload_failed", extra={"video_id": video_id, "error": str(e)})
+
+        if caption_content:
+            try:
+                await self._upload_caption(
+                    access_token, video_id, caption_content, caption_language or "en"
+                )
+            except httpx.HTTPStatusError as e:
+                # Non-fatal for the same reason as thumbnail: the video
+                # itself is already published successfully. A missing
+                # caption track is a quality gap, not a failed publish.
+                logger.warning("caption_upload_failed", extra={"video_id": video_id, "error": str(e)})
 
         return video_id
 
@@ -110,6 +148,7 @@ class YoutubeUploadClient:
         description: str,
         tags: list[str],
         category_id: str,
+        contains_synthetic_media: bool,
         default_language: str | None,
     ) -> str:
         video_bytes = Path(video_path).read_bytes()
@@ -128,7 +167,14 @@ class YoutubeUploadClient:
             snippet["defaultAudioLanguage"] = default_language
         metadata = {
             "snippet": snippet,
-            "status": {"privacyStatus": "private"},
+            "status": {
+                "privacyStatus": "private",
+                # YouTube's 2026 synthetic-media disclosure requirement:
+                # every video this pipeline produces has AI-generated
+                # narration and AI-generated visuals, so this is always
+                # true rather than a per-video decision.
+                "containsSyntheticMedia": contains_synthetic_media,
+            },
         }
 
         init_response = await self._http.post(
@@ -152,6 +198,39 @@ class YoutubeUploadClient:
         )
         upload_response.raise_for_status()
         return upload_response.json()["id"]
+
+    async def _upload_caption(
+        self, access_token: str, video_id: str, caption_content: str, language: str
+    ) -> None:
+        caption_bytes = caption_content.encode("utf-8")
+        metadata = {
+            "snippet": {
+                "videoId": video_id,
+                "language": language,
+                "name": "",  # empty name = track has no extra label, just the language
+            }
+        }
+
+        init_response = await self._http.post(
+            f"{UPLOAD_BASE_URL}/captions",
+            params={"uploadType": "resumable", "part": "snippet"},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json; charset=UTF-8",
+                "X-Upload-Content-Length": str(len(caption_bytes)),
+                "X-Upload-Content-Type": "application/octet-stream",
+            },
+            json=metadata,
+        )
+        init_response.raise_for_status()
+        session_url = init_response.headers["Location"]
+
+        upload_response = await self._http.put(
+            session_url,
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/octet-stream"},
+            content=caption_bytes,
+        )
+        upload_response.raise_for_status()
 
     async def _set_thumbnail(self, access_token: str, video_id: str, thumbnail_path: str) -> None:
         thumbnail_bytes = Path(thumbnail_path).read_bytes()

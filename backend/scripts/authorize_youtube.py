@@ -3,8 +3,15 @@
 Run this once (and again whenever token.json's refresh token expires -
 every 7 days on an OAuth consent screen left in Testing mode, which is
 the default for personal/unverified use). Opens a browser for you to sign
-in and grant the youtube.upload scope, then saves the resulting
+in and grant the youtube.force-ssl scope, then saves the resulting
 credentials (including the refresh token) to backend/token.json.
+
+Scope is youtube.force-ssl, not the narrower youtube.upload used
+previously - captions.insert (for uploading a real caption track) requires
+force-ssl or youtubepartner; force-ssl also covers videos.insert, so one
+scope covers both instead of needing two. Existing tokens obtained under
+the old youtube.upload-only scope do NOT have caption-upload permission -
+re-run this script to get a token with the expanded scope.
 
 The actual backend service (YoutubeUploadClient) only ever reads
 token.json and refreshes the access token as needed - it never runs this
@@ -21,7 +28,7 @@ from pathlib import Path
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 CLIENT_SECRETS_PATH = Path(__file__).resolve().parent.parent / "client_secrets.json"
 TOKEN_PATH = Path(__file__).resolve().parent.parent / "token.json"
 

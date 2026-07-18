@@ -10,6 +10,7 @@ from app.exceptions.publish_exceptions import VideoAlreadyPublishedError
 from app.exceptions.script_exceptions import ScriptNotFoundError
 from app.exceptions.video_exceptions import VideoNotFoundError
 from app.exceptions.voice_exceptions import NarrationNotFoundError
+from app.infrastructure.external.srt_builder import build_srt
 from app.infrastructure.external.youtube_upload_client import YoutubeUploadClient
 from app.repositories.interfaces.publish_repository import PublishRepositoryInterface
 from app.repositories.interfaces.script_repository import ScriptRepositoryInterface
@@ -74,10 +75,22 @@ class PublishService:
             description=self._build_description(script.hook, script.cta),
             tags=self._build_tags(script.title, script.video_idea),
             category_id=self._category_id,
+            # Every video this pipeline produces has AI voice narration and
+            # AI-generated visuals, so disclosure is always required - not a
+            # per-video judgment call.
+            contains_synthetic_media=True,
             thumbnail_path=str(self._media_root / video.thumbnail_file_path),
             default_language=self._content_language,
+            # Real YouTube caption track, not burned into the video frame -
+            # see ffmpeg_assembler.py for why (a real rendering-correctness
+            # bug for complex scripts like Telugu). Sidesteps that bug
+            # entirely since YouTube's own renderer draws this text, and
+            # gives viewers YouTube's built-in auto-translate for free.
+            caption_content=build_srt(script, narration),
+            caption_language=self._content_language,
         )
         youtube_url = f"https://youtu.be/{youtube_video_id}"
+        await self._video_repository.mark_synthetic_content_disclosed(video_id)
 
         logger.info(
             "publish_completed",

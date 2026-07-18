@@ -28,7 +28,17 @@ class FakeUploadClient:
         self.calls: list[dict] = []
 
     async def upload_video(
-        self, video_path, title, description, tags, category_id, thumbnail_path=None, default_language=None
+        self,
+        video_path,
+        title,
+        description,
+        tags,
+        category_id,
+        contains_synthetic_media,
+        thumbnail_path=None,
+        default_language=None,
+        caption_content=None,
+        caption_language=None,
     ) -> str:
         self.calls.append(
             {
@@ -37,8 +47,11 @@ class FakeUploadClient:
                 "description": description,
                 "tags": tags,
                 "category_id": category_id,
+                "contains_synthetic_media": contains_synthetic_media,
                 "thumbnail_path": thumbnail_path,
                 "default_language": default_language,
+                "caption_content": caption_content,
+                "caption_language": caption_language,
             }
         )
         return self.youtube_video_id
@@ -47,11 +60,15 @@ class FakeUploadClient:
 class FakeVideoRepository:
     def __init__(self, video: AssembledVideoDomain | None) -> None:
         self.video = video
+        self.disclosed_calls: list = []
 
     async def get_video(self, video_id):
         if self.video and self.video.id == video_id:
             return self.video
         return None
+
+    async def mark_synthetic_content_disclosed(self, video_id) -> None:
+        self.disclosed_calls.append(video_id)
 
 
 class FakeVoiceRepository:
@@ -137,9 +154,10 @@ def _make_service(
 ):
     upload_client = FakeUploadClient()
     publish_repo = FakePublishRepository(existing=existing_upload)
+    video_repo = FakeVideoRepository(video)
     service = PublishService(
         upload_client=upload_client,
-        video_repository=FakeVideoRepository(video),
+        video_repository=video_repo,
         voice_repository=FakeVoiceRepository(narration),
         script_repository=FakeScriptRepository(script),
         publish_repository=publish_repo,
@@ -147,14 +165,14 @@ def _make_service(
         category_id="28",
         content_language=content_language,
     )
-    return service, upload_client, publish_repo
+    return service, upload_client, publish_repo, video_repo
 
 
 async def test_publish_uploads_with_metadata_from_script(tmp_path):
     script = _make_script()
     narration = _make_narration(script.id)
     video = _make_video(narration.id)
-    service, upload_client, publish_repo = _make_service(tmp_path, video, narration, script)
+    service, upload_client, publish_repo, video_repo = _make_service(tmp_path, video, narration, script)
 
     result = await service.publish(video.id)
 
@@ -164,11 +182,32 @@ async def test_publish_uploads_with_metadata_from_script(tmp_path):
     assert script.hook in call["description"]
     assert script.cta in call["description"]
     assert call["category_id"] == "28"
+    assert call["contains_synthetic_media"] is True
     assert result.youtube_video_id == "abc123"
     assert result.youtube_url == "https://youtu.be/abc123"
     assert publish_repo.create_calls[0]["video_id"] == video.id
     assert "AI World" in call["tags"]
     assert "Saves" in call["tags"] or "saves" in [t.lower() for t in call["tags"]]
+    assert video_repo.disclosed_calls == [video.id]
+
+
+async def test_publish_uploads_a_real_caption_track_built_from_script_text(tmp_path):
+    # Captions are no longer burned into the video frame (a real Telugu
+    # rendering-correctness bug) - PublishService uploads the script's own
+    # text as a real YouTube caption track instead.
+    script = _make_script()
+    narration = _make_narration(script.id)
+    video = _make_video(narration.id)
+    service, upload_client, _, _ = _make_service(
+        tmp_path, video, narration, script, content_language="te"
+    )
+
+    await service.publish(video.id)
+
+    call = upload_client.calls[0]
+    assert script.segments[0].text in call["caption_content"]
+    assert "00:00:00,000 -->" in call["caption_content"]
+    assert call["caption_language"] == "te"
 
 
 def test_build_tags_derives_keywords_from_title_and_idea_not_static_list():
@@ -189,7 +228,7 @@ async def test_publish_sets_default_language_from_content_language_setting(tmp_p
     script = _make_script()
     narration = _make_narration(script.id)
     video = _make_video(narration.id)
-    service, upload_client, _ = _make_service(
+    service, upload_client, _, _ = _make_service(
         tmp_path, video, narration, script, content_language="te"
     )
 
@@ -199,7 +238,7 @@ async def test_publish_sets_default_language_from_content_language_setting(tmp_p
 
 
 async def test_publish_raises_when_video_not_found(tmp_path):
-    service, upload_client, _ = _make_service(tmp_path, video=None, narration=None, script=None)
+    service, upload_client, _, _ = _make_service(tmp_path, video=None, narration=None, script=None)
 
     with pytest.raises(VideoNotFoundError):
         await service.publish(uuid4())
@@ -218,7 +257,7 @@ async def test_publish_raises_when_already_published(tmp_path):
         youtube_url="https://youtu.be/already-there",
         uploaded_at=datetime.now(UTC),
     )
-    service, upload_client, _ = _make_service(tmp_path, video, narration, script, existing_upload=existing)
+    service, upload_client, _, _ = _make_service(tmp_path, video, narration, script, existing_upload=existing)
 
     with pytest.raises(VideoAlreadyPublishedError):
         await service.publish(video.id)
@@ -228,7 +267,7 @@ async def test_publish_raises_when_already_published(tmp_path):
 
 async def test_publish_raises_when_narration_not_found(tmp_path):
     video = _make_video(uuid4())
-    service, upload_client, _ = _make_service(tmp_path, video, narration=None, script=None)
+    service, upload_client, _, _ = _make_service(tmp_path, video, narration=None, script=None)
 
     with pytest.raises(NarrationNotFoundError):
         await service.publish(video.id)
@@ -239,7 +278,7 @@ async def test_publish_raises_when_narration_not_found(tmp_path):
 async def test_publish_raises_when_script_not_found(tmp_path):
     narration = _make_narration(uuid4())
     video = _make_video(narration.id)
-    service, upload_client, _ = _make_service(tmp_path, video, narration, script=None)
+    service, upload_client, _, _ = _make_service(tmp_path, video, narration, script=None)
 
     with pytest.raises(ScriptNotFoundError):
         await service.publish(video.id)
@@ -251,10 +290,10 @@ async def test_get_by_video_id_returns_existing_upload(tmp_path):
     script = _make_script()
     narration = _make_narration(script.id)
     video = _make_video(narration.id)
-    service, _, _ = _make_service(tmp_path, video, narration, script)
+    service, _, _, _ = _make_service(tmp_path, video, narration, script)
 
     created = await service.publish(video.id)
-    fetched_service, _, _ = _make_service(tmp_path, video, narration, script, existing_upload=created)
+    fetched_service, _, _, _ = _make_service(tmp_path, video, narration, script, existing_upload=created)
     fetched = await fetched_service.get_by_video_id(video.id)
 
     assert fetched is not None
@@ -262,7 +301,7 @@ async def test_get_by_video_id_returns_existing_upload(tmp_path):
 
 
 async def test_get_by_video_id_returns_none_when_not_found(tmp_path):
-    service, _, _ = _make_service(tmp_path, video=None, narration=None, script=None)
+    service, _, _, _ = _make_service(tmp_path, video=None, narration=None, script=None)
 
     result = await service.get_by_video_id(uuid4())
 

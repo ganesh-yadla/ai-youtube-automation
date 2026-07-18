@@ -15,14 +15,15 @@ class VideoScene:
 
     image_path: str
     audio_path: str
-    caption_text: str
 
 
 class VideoAssemblerInterface(Protocol):
     async def assemble(self, scenes: list[VideoScene], output_path: str) -> None:
         """Renders each scene (image shown for its audio's duration, audio
-        playing, caption burned in) and concatenates them, in order, into
-        one video file written to output_path.
+        playing) and concatenates them, in order, into one video file
+        written to output_path. Captions are not burned in - see
+        PublishService for the real YouTube caption track this pipeline
+        uploads instead.
         """
         ...
 

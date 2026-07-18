@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.video import AssembledVideo as AssembledVideoDomain
@@ -39,6 +39,15 @@ class VideoRepository:
         video = result.scalar_one_or_none()
 
         return AssembledVideoDomain.model_validate(video) if video else None
+
+    async def mark_synthetic_content_disclosed(self, video_id: UUID) -> None:
+        stmt = (
+            update(AssembledVideoORM)
+            .where(AssembledVideoORM.id == video_id)
+            .values(synthetic_content_disclosed=True)
+        )
+        await self._session.execute(stmt)
+        await self._session.commit()
 
     async def get_video_by_narration_id(self, narration_id: UUID) -> AssembledVideoDomain | None:
         stmt = select(AssembledVideoORM).where(AssembledVideoORM.narration_id == narration_id)

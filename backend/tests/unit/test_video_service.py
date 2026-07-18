@@ -161,7 +161,7 @@ async def test_generate_creates_one_image_per_segment_plus_thumbnail(tmp_path):
     assert image_client.prompts[:3] == ["Visual 0", "Visual 1", "Visual 2"]
 
 
-async def test_generate_assembles_scenes_with_matching_audio_and_captions(tmp_path):
+async def test_generate_assembles_scenes_with_matching_audio_and_images(tmp_path):
     script = _make_script(segment_count=2)
     narration = _make_narration(script.id, segment_count=2)
     service, _, assembler, _ = _make_service(tmp_path, script, narration)
@@ -171,7 +171,6 @@ async def test_generate_assembles_scenes_with_matching_audio_and_captions(tmp_pa
     assert len(assembler.calls) == 1
     scenes, _output_path = assembler.calls[0]
     assert len(scenes) == 2
-    assert scenes[0].caption_text == "Segment 0 text"
     expected_audio_path = tmp_path / narration.segments[0].audio_file_path
     assert Path(scenes[0].audio_path) == expected_audio_path
 

@@ -76,7 +76,6 @@ class VideoService:
                 VideoScene(
                     image_path=str(self._media_root / image_relative_path),
                     audio_path=str(self._media_root / voice_segment.audio_file_path),
-                    caption_text=script_segment.text,
                 )
             )
 

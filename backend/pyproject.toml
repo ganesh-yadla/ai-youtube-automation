@@ -24,6 +24,9 @@ dependencies = [
     "google-auth>=2.0",
     "google-auth-oauthlib>=1.4",
     "google-auth-httplib2>=0.4",
+    "pillow>=11.0",
+    "uharfbuzz>=0.55",
+    "freetype-py>=2.5",
 ]
 
 [project.optional-dependencies]
