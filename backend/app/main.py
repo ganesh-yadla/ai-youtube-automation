@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.exception_handlers import register_exception_handlers
@@ -52,6 +53,16 @@ def create_app() -> FastAPI:
         description="Trend Intelligence API",
         version="0.1.0",
         lifespan=lifespan,
+    )
+
+    # Personal-use, single-origin frontend - one dev server URL, not a
+    # wildcard, since credentials aren't involved but there's no reason to
+    # be more permissive than what actually calls this API.
+    fastapi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[settings.frontend_origin],
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @fastapi_app.get("/health", tags=["health"])

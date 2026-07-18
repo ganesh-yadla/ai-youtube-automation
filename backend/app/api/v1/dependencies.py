@@ -30,6 +30,7 @@ from app.repositories.trend_repository import TrendRepository
 from app.repositories.video_repository import VideoRepository
 from app.repositories.voice_repository import VoiceRepository
 from app.services.ai_analysis_service import AIAnalysisService
+from app.services.orchestration_service import OrchestrationService
 from app.services.publish_service import PublishService
 from app.services.script_service import ScriptService
 from app.services.trend_service import TrendService
@@ -172,6 +173,16 @@ def get_video_service(
         voice_repository=voice_repository,
         video_repository=video_repository,
         media_root=settings.media_root,
+    )
+
+
+def get_orchestration_service(
+    script_service: ScriptService = Depends(get_script_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+    video_service: VideoService = Depends(get_video_service),
+) -> OrchestrationService:
+    return OrchestrationService(
+        script_service=script_service, voice_service=voice_service, video_service=video_service
     )
 
 

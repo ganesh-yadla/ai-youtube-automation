@@ -6,10 +6,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
-from app.api.v1.dependencies import get_ai_analysis_service, get_script_service, get_trend_service
+from app.api.v1.dependencies import (
+    get_ai_analysis_service,
+    get_orchestration_service,
+    get_script_service,
+    get_trend_service,
+)
+from app.api.v1.schemas.orchestration import GenerateVideoResponse
 from app.api.v1.schemas.script import ScriptGenerationRequest, ScriptResponse
 from app.api.v1.schemas.trend import TrendAnalysisResponse, TrendSearchRequest, TrendSearchResponse
+from app.api.v1.schemas.video import AssembledVideoResponse
 from app.services.ai_analysis_service import AIAnalysisService
+from app.services.orchestration_service import OrchestrationService
 from app.services.script_service import ScriptService
 from app.services.trend_service import TrendService
 
@@ -55,3 +63,20 @@ async def generate_script(
 ) -> ScriptResponse:
     result = await service.generate(search_id, video_idea=request.video_idea)
     return ScriptResponse.model_validate(result)
+
+
+@router.post(
+    "/{search_id}/generate-video",
+    response_model=GenerateVideoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def generate_video(
+    search_id: UUID,
+    request: ScriptGenerationRequest,
+    service: OrchestrationService = Depends(get_orchestration_service),
+) -> GenerateVideoResponse:
+    script, video = await service.generate_video(search_id, video_idea=request.video_idea)
+    return GenerateVideoResponse(
+        script=ScriptResponse.model_validate(script),
+        video=AssembledVideoResponse.from_domain(video),
+    )

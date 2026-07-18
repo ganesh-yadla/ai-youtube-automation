@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     environment: str = Field(default="development")
     log_level: str = Field(default="INFO")
+    frontend_origin: str = Field(default="http://localhost:3000")
 
     database_url: str
     redis_url: str = Field(default="redis://localhost:6379/0")
