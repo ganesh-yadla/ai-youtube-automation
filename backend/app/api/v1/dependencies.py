@@ -53,19 +53,36 @@ def get_ollama_client() -> OllamaClient:
     return OllamaClient()
 
 
+def _llm_client_by_provider() -> LLMClientInterface:
+    settings = get_settings()
+    if settings.llm_provider == "gemini":
+        return get_gemini_client()
+    if settings.llm_provider == "ollama":
+        return get_ollama_client()
+    return ClaudeClient()
+
+
 @lru_cache
-def get_llm_client() -> LLMClientInterface:
+def get_insights_llm_client() -> LLMClientInterface:
+    # Trend insights (why_performing, common_hooks, etc.) are never
+    # translated - they're internal analysis text feeding the script
+    # prompt, not viewer-facing content, so there's no Telugu-quality
+    # reason to force Gemini here the way script generation does. Forcing
+    # it anyway (an earlier version of this function did, for both) wasted
+    # Gemini's shared daily free-tier quota for zero benefit - confirmed
+    # by hitting that quota wall roughly twice as fast as necessary.
+    return _llm_client_by_provider()
+
+
+@lru_cache
+def get_script_llm_client() -> LLMClientInterface:
     settings = get_settings()
     if settings.content_language == "te":
         # Script quality was tested for real, side by side: Ollama's Telugu
         # is valid but noticeably rougher than Gemini's for the same
         # prompt - not a place to default to the cheaper local option.
         return get_gemini_client()
-    if settings.llm_provider == "gemini":
-        return get_gemini_client()
-    if settings.llm_provider == "ollama":
-        return get_ollama_client()
-    return ClaudeClient()
+    return _llm_client_by_provider()
 
 
 @lru_cache
@@ -77,7 +94,7 @@ def get_tts_client() -> TTSClientInterface:
     settings = get_settings()
     if settings.tts_provider == "piper":
         return get_piper_client()
-    # Shares the connection with get_llm_client() when that's also Gemini.
+    # Shares the connection with get_script_llm_client() when that's also Gemini.
     return get_gemini_client()
 
 
@@ -90,7 +107,7 @@ def get_image_client() -> ImageClientInterface:
     settings = get_settings()
     if settings.image_provider == "local":
         return get_local_image_client()
-    # Shares the connection with get_llm_client() when that's also Gemini.
+    # Shares the connection with get_script_llm_client() when that's also Gemini.
     return get_gemini_client()
 
 
@@ -123,7 +140,7 @@ def get_script_repository(session: AsyncSession = Depends(get_db)) -> ScriptRepo
 
 
 def get_ai_analysis_service(
-    llm_client: LLMClientInterface = Depends(get_llm_client),
+    llm_client: LLMClientInterface = Depends(get_insights_llm_client),
     repository: TrendRepository = Depends(get_trend_repository),
     script_repository: ScriptRepository = Depends(get_script_repository),
 ) -> AIAnalysisService:
@@ -133,7 +150,7 @@ def get_ai_analysis_service(
 
 
 def get_script_service(
-    llm_client: LLMClientInterface = Depends(get_llm_client),
+    llm_client: LLMClientInterface = Depends(get_script_llm_client),
     trend_repository: TrendRepository = Depends(get_trend_repository),
     script_repository: ScriptRepository = Depends(get_script_repository),
     settings: Settings = Depends(get_settings),

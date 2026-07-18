@@ -40,12 +40,15 @@ const BUSY_STEPS: Step[] = ["searching", "analyzing", "generating_script", "gene
 // randomized, not scheduled) - daily rotation/no-repeat tracking across
 // categories is still manual; the uniqueness filter already in the
 // pipeline catches repeats within a category and across all of them.
+// No "shorts" in these keywords - it added noise to trend search results
+// without narrowing them usefully (YouTube already returns short-form
+// content dominated results for these topics on its own).
 const CONTENT_CATEGORIES = [
-  { label: "Motivational Speech", keyword: "AI motivational speech shorts" },
-  { label: "Animal Facts", keyword: "AI animal facts shorts" },
-  { label: "Fitness", keyword: "AI fitness tips shorts" },
-  { label: "Facts", keyword: "AI interesting facts shorts" },
-  { label: "Stories", keyword: "AI short stories shorts" },
+  { label: "Motivational Speech", keyword: "AI motivational speech" },
+  { label: "Animal Facts", keyword: "AI animal facts" },
+  { label: "Fitness", keyword: "AI fitness tips" },
+  { label: "Facts", keyword: "AI interesting facts" },
+  { label: "Stories", keyword: "AI short stories" },
 ];
 
 export default function Home() {

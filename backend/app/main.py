@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from app.api.exception_handlers import register_exception_handlers
 from app.api.v1.dependencies import (
     get_gemini_client,
-    get_llm_client,
+    get_insights_llm_client,
+    get_script_llm_client,
     get_youtube_client,
     get_youtube_upload_client,
 )
@@ -30,11 +31,15 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     yield
     await get_youtube_client().close()
     await get_youtube_upload_client().close()
-    await get_llm_client().close()
-    # get_llm_client() only closes this when LLM_PROVIDER=gemini - Gemini is
-    # also always used for TTS regardless, so close it unconditionally too.
-    # (Same cached instance either way - lru_cache makes this a no-op double
-    # reference, not a second live client.)
+    # get_insights_llm_client()/get_script_llm_client() can each resolve to
+    # Gemini, Ollama, or Claude depending on settings - close whichever
+    # they actually picked. Gemini is also always used for TTS regardless
+    # of LLM_PROVIDER, so close it unconditionally too - all of these are
+    # @lru_cache'd, so closing the same underlying client twice (e.g. both
+    # LLM roles resolving to Gemini) is a harmless no-op double reference,
+    # not a second live client.
+    await get_insights_llm_client().close()
+    await get_script_llm_client().close()
     await get_gemini_client().close()
     await get_redis_client().aclose()
     await engine.dispose()
