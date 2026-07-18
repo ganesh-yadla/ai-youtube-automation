@@ -1,6 +1,7 @@
 """Business logic for publishing an AssembledVideo to YouTube."""
 
 import logging
+import re
 from pathlib import Path
 from uuid import UUID
 
@@ -16,6 +17,13 @@ from app.repositories.interfaces.video_repository import VideoRepositoryInterfac
 from app.repositories.interfaces.voice_repository import VoiceRepositoryInterface
 
 logger = logging.getLogger(__name__)
+
+_BASE_TAGS = ["Shorts", "AI Tools", "Ganuverse"]
+_TAG_STOP_WORDS = {
+    "the", "a", "an", "to", "for", "of", "in", "on", "and", "or", "with",
+    "your", "you", "how", "this", "that", "is", "are", "it", "using", "why",
+}
+_MAX_KEYWORD_TAGS = 8
 
 
 class PublishService:
@@ -62,7 +70,7 @@ class PublishService:
             video_path=str(self._media_root / video.video_file_path),
             title=script.title,
             description=self._build_description(script.hook, script.cta),
-            tags=["Shorts", "AI", "QuickBit"],
+            tags=self._build_tags(script.title, script.video_idea),
             category_id=self._category_id,
             thumbnail_path=str(self._media_root / video.thumbnail_file_path),
         )
@@ -82,4 +90,22 @@ class PublishService:
 
     @staticmethod
     def _build_description(hook: str, cta: str) -> str:
-        return f"{hook}\n\n{cta}\n\n#Shorts #AI #QuickBit"
+        return f"{hook}\n\n{cta}\n\n#Shorts #AI #Ganuverse"
+
+    @staticmethod
+    def _build_tags(title: str, video_idea: str) -> list[str]:
+        # The same 3 static tags on every upload is itself a templating
+        # signal (see YouTube's 2026 crackdown on "mass-produced, templated"
+        # channels) - deriving tags from each video's own title/idea instead
+        # keeps every upload's metadata genuinely distinct without needing
+        # an extra LLM call.
+        words = re.findall(r"[A-Za-z0-9]+", f"{title} {video_idea}")
+        keyword_tags: list[str] = []
+        seen: set[str] = set()
+        for word in words:
+            normalized = word.lower()
+            if len(normalized) < 3 or normalized in _TAG_STOP_WORDS or normalized in seen:
+                continue
+            seen.add(normalized)
+            keyword_tags.append(word)
+        return _BASE_TAGS + keyword_tags[:_MAX_KEYWORD_TAGS]

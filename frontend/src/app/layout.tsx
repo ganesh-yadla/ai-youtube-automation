@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "QuickBit — Creator OS",
-  description: "Trend search, video generation, and YouTube publishing for QuickBit.",
+  title: "Ganuverse — Creator OS",
+  description: "Trend search, video generation, and YouTube publishing for Ganuverse.",
 };
 
 export default function RootLayout({

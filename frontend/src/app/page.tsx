@@ -123,7 +123,7 @@ export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
       <header>
-        <h1 className="text-2xl font-semibold">QuickBit</h1>
+        <h1 className="text-2xl font-semibold">Ganuverse</h1>
         <p className="text-sm text-neutral-500">Find a trend, generate a Short, publish it.</p>
       </header>
 
