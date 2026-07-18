@@ -192,6 +192,24 @@ async def test_generate_requests_a_textless_thumbnail_background_and_overlays_re
     assert text == script.title
 
 
+async def test_generate_builds_thumbnail_prompt_from_first_segment_visual_not_hook(tmp_path):
+    # Regression guard: a real Telugu-mode generation showed embedding
+    # script.hook (which follows content_language, so can be non-English)
+    # into the thumbnail prompt produced a topically unrelated image, since
+    # the image model couldn't interpret non-English text. segments[*].
+    # visual_description is always English regardless of content_language,
+    # so it's used as the thumbnail concept source instead.
+    script = _make_script(segment_count=2)
+    narration = _make_narration(script.id, segment_count=2)
+    service, image_client, _, _ = _make_service(tmp_path, script, narration)
+
+    await service.generate(narration.id)
+
+    thumbnail_prompt = image_client.prompts[-1]
+    assert "Visual 0" in thumbnail_prompt
+    assert script.hook not in thumbnail_prompt
+
+
 async def test_generate_persists_video_with_summed_duration(tmp_path):
     script = _make_script(segment_count=2)
     narration = _make_narration(script.id, segment_count=2)

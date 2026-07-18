@@ -85,8 +85,18 @@ class VideoService:
         # with "isn't" rendered as "IS'N'T"). The real title is burned on
         # top afterward via ffmpeg, which draws actual, correctly-spelled
         # characters.
+        #
+        # Uses segments[0].visual_description, not script.hook, as the
+        # concept source - visual_description is always in English (the
+        # script prompt writes it for an AI image generator regardless of
+        # content_language), while hook/title follow content_language. A
+        # real Telugu-mode generation confirmed the bug this avoids:
+        # embedding the raw Telugu hook into an otherwise-English prompt
+        # produced a topically unrelated image, since the (English-trained)
+        # image model couldn't interpret the Telugu text.
         thumbnail_background_bytes = await self._image_client.generate_image(
-            self._thumbnail_background_prompt(script.hook), aspect_ratio=_ASPECT_RATIO
+            self._thumbnail_background_prompt(script.segments[0].visual_description),
+            aspect_ratio=_ASPECT_RATIO,
         )
         thumbnail_background_path = f"{images_relative_dir}/thumbnail_background.png"
         (self._media_root / thumbnail_background_path).write_bytes(thumbnail_background_bytes)
@@ -120,9 +130,10 @@ class VideoService:
         return await self._video_repository.get_video(video_id)
 
     @staticmethod
-    def _thumbnail_background_prompt(hook: str) -> str:
+    def _thumbnail_background_prompt(visual_concept: str) -> str:
         return (
-            f'A scroll-stopping YouTube Shorts thumbnail background for a video about: "{hook}". '
+            f"A scroll-stopping YouTube Shorts thumbnail background, based on this concept: "
+            f'"{visual_concept}". '
             "Bold, high-contrast, visually striking composition with a clear focal subject "
             "and empty space where large title text will be overlaid afterward. "
             "Clean, uncluttered setting - a minimal studio backdrop, a tidy modern workspace, "
